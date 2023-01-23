@@ -23,7 +23,7 @@
 #endif
         ret
         jr      nc,start_of_program
-        .db     "Annihilation by cjg0n3",0
+        .db     "Annihilation",0
 start_of_program:
 	ld hl, end_code
 	ld de,Variables
@@ -5138,10 +5138,3 @@ Object_Table:
 
 .end
 END
-
-
-
-
-
-
-
