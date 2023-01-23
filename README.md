@@ -1,5 +1,5 @@
 # [Annihilation](https://www.ticalc.org/archives/files/fileinfo/429/42979.html)
-An incomplete shoot 'em up game for the TI-84+ (and 83) calculator that I wrote back in 2010. :) 
+An incomplete shoot 'em up game for the TI-84+ (and 83) calculator that I wrote back in 2010. 🙂
 
 For more info about uploading the game to your calculator, see https://www.ticalc.org/archives/files/fileinfo/429/42979.html.
 
