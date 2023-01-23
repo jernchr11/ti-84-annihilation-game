@@ -1,0 +1,5147 @@
+;==========================================================
+;Annihilation shooter
+;Christopher Jernigan
+;==========================================================
+        .nolist
+#ifdef	VTI
+	#define TI83P
+#endif
+	#include	"keyval.inc"
+        #include        "ion.inc"
+#define LEFT 1
+#define RIGHT 2
+#define UP 3
+#define DOWN 4
+#define COLLISION 1
+        .list
+
+#ifdef  TI83P
+        .org    progstart-2
+        .db     $BB,$6D
+#else
+        .org    progstart
+#endif
+        ret
+        jr      nc,start_of_program
+        .db     "Annihilation by cjg0n3",0
+start_of_program:
+	ld hl, end_code
+	ld de,Variables
+	or a
+	sbc hl,de
+	bcall(_disphl)
+	bcall(_getkey)
+	ld a,(session)
+	or a
+	jp z,StartNewGame
+	Call Recallgame
+	jp _fxdelay
+	
+;-----------------------------------------------
+;MAIN LOOP:
+;-----------------------------------------------
+_main:
+	Call SetUpgame
+	xor a
+	ld (Shoot_Timer),a
+	ld a,1
+	ld (session),a
+main:
+	Call Create_New_Enemies
+	Call Handle_Ally
+	Call ChkLives
+	Call Player_Enemy_Collision
+	Call BulletCollisionChk
+	Call PlayerCollisionChk
+	Call Handle_Bullet_D_C ;changed
+	Call Handle_Objects    ;changed
+	Call MoveBullets
+	Call Getkeys
+	Call Handle_background
+	;Call Handle_sidescroll
+	Call Handle_Invul
+	Call DrawBullets
+	Call Draw_Objects
+	Call Draw_Ally
+	Call Draw_Score
+	Call Draw_Lives
+	Call Draw_Level
+	Call gsCopyBuffer
+	Call ReadOnKey
+_fxdelay:
+	ld a,(shoot_Timer)
+	;cp 3
+	;Call nc,EndProg
+	cp 2
+	jr nc,Contix
+	jp _fxdelay
+Contix:
+	xor a
+	ld (shoot_timer),a
+	jr main
+;-----------------------------------------------
+;END MAIN LOOP
+;-----------------------------------------------	
+;-----------------------------------------------
+Functions:
+;-----------------------------------------------
+menu:
+	Call Calculate_Level
+	ld (Curlevel),a
+	;Call ChkLives
+	;Call BulletCollisionChk
+	;Call PlayerCollisionChk
+	ld a,$FF
+	out (1),a
+	nop
+	nop
+	ld a,$FD
+	out (1),a
+	nop
+	nop
+	in a,(1)
+	cp $FE
+	jp z,_main	
+	Call Create_New_Enemies
+	Call Handle_Bullet_D_C
+	Call Handle_Objects
+	Call MoveBullets
+	;Call Getkeys
+	Call Handle_background
+	Call Handle_Invul
+	Call DrawBullets
+	Call Draw_Objects
+	;Call Draw_Score
+	;Call Draw_Lives
+	ld a,(menu_c)
+	inc a
+	and 63
+	ld (menu_c),a
+	cp 32
+	jr c,blankbox
+	ld hl,Press
+	ld de,$9340 +(25*12)
+	ld bc,168
+	ldir
+	ld hl,Press2
+	ld de,$86EC +(25*12)
+	ld bc,168
+	ldir
+	jr updatelcd
+
+blankbox:
+	ld hl,box
+	ld de,$9340 +(25*12)
+	ld bc,168
+	ldir
+	ld hl,box2
+	ld de,$86EC +(25*12)
+	ld bc,168
+	ldir
+Updatelcd:
+	Call gsCopyBuffer
+	jr menu
+StartNewGame:	
+	call gsClearbuffer
+	call gsEnable
+	ld a,$01
+	out ($20),a
+	
+_start:
+	Call Setupgame
+	
+	xor a
+	ld (shoot_timer),a
+title_screen:
+	ld hl,title
+	ld de,$9340
+	ld bc,768
+	ldir
+	ld hl,title2
+	ld de,$86EC
+	ld bc,768
+	ldir
+	
+	
+	ld a,(option_num)
+	ld e,a
+	ld d,0
+	ld hl,xtab
+	add hl,de
+	ld a,(hl)
+	ld hl,ytab
+	add hl,de
+	ld l,(hl)
+	ld b,2
+	ld ix,Tab
+	ld de,$86EC
+	Call PutSpriteXOR
+	ld a,(option_num)
+	ld e,a
+	ld d,0
+	ld hl,xtab
+	add hl,de
+	ld a,(hl)
+	ld hl,ytab
+	add hl,de
+	ld l,(hl)
+	ld b,2
+	ld ix,Tab
+	ld de,$9340
+	Call PutSpriteXOR	
+	
+	call gscopybuffer
+	
+	
+	ld a,$FF
+	nop
+	out (1),a
+	ld a,$FE
+	out (1),a
+	nop
+	nop
+	in a,(1)
+	cp $F7
+	Call z,_optionUP
+	ld a,$FF
+	nop
+	out (1),a
+	ld a,$FE
+	out (1),a
+	nop
+	nop
+	in a,(1)
+	cp $FE
+	Call z,_optionDOWN
+	ld a,$FF
+	out (1),a
+	nop
+	ld a,$BF
+	out (1),a
+	nop
+	nop
+	in a,(1)
+	cp $DF
+	jr z,option_s
+	
+_fxdelay1:
+	ld a,(shoot_Timer)
+	;cp 3
+	;Call nc,EndProg
+	cp 6
+	jr nc,Contix1
+	jp _fxdelay1
+Contix1:
+	xor a
+	ld (shoot_timer),a
+	
+	jp title_screen
+
+_OptionUP:
+	ld a,(option_num)
+	or a
+	ret z
+	dec a
+	ld (option_num),a
+	ret
+_OptionDOWN:
+	ld a,(option_num)
+	cp 2
+	ret z
+	inc a
+	ld (option_num),a
+	ret
+option_s:
+	xor a
+	ld (shoot_Timer),a
+_fxdelay2:
+	ld a,(shoot_Timer)
+	;cp 3
+	;Call nc,EndProg
+	cp 15
+	jr nc,Contix2
+	jp _fxdelay2
+Contix2:
+	xor a
+	ld (shoot_timer),a
+	
+	ld a,(option_num)
+	or a
+	jp z,Handle_Levels
+	cp 1
+	jp z,hiscoretable
+	
+	call gsdisable
+	res 7,(iy+20)
+	ret
+hiscoretable:
+	ld hl,scorehi
+	ld de,$9340
+	ld bc,768
+	ldir
+	ld hl,scorehi2
+	ld de,$86EC
+	ld bc,768
+	ldir
+	call gsdisable
+		
+	ld a,18
+	ld (PenCol),a
+	ld a,16		
+	ld (PenRow),a
+	ld hl,UserA+2
+	bcall(_VPutS)
+
+	ld a,18
+	ld (PenCol),a
+	ld a,32
+	ld (PenRow),a
+	ld hl,UserB+2
+	bcall(_VPutS)
+	ld a,18
+	ld (PenCol),a
+	ld a,48
+	ld (PenRow),a
+	ld hl,UserC+2
+	bcall(_VPutS)
+	call gsenable	
+	
+	ld de,hiScore1
+	ld c,28
+	ld l,23
+	Call _drw_score	
+	
+	ld de,hiScore2
+	ld c,28
+	ld l,39
+	Call _drw_score	
+	
+	ld de,hiScore3
+	ld c,28
+	ld l,55
+	Call _drw_score	
+	
+	call gscopybuffer
+_bitmapkey:
+	ld a,$FF
+	out (1),a
+	nop
+	nop
+	ld a,$FD
+	out (1),a
+	nop
+	nop
+	in a,(1)
+	cp $FE
+	jp z,title_screen	
+	
+	
+	jr _bitmapkey
+Handle_Levels:
+	xor a
+	out ($20),a
+	Call Handle_background
+	;ld hl,$9340
+	;ld (hl),0
+	;ld de,$9340+1
+	;ld bc,767
+	;ldir
+	;ld hl,$86EC
+	;ld (hl),0
+	;ld de,$86EC+1
+	;ld bc,767
+	;ldir
+	ld hl,ChooseLevel
+	ld de,$9340
+	ld bc,168
+	ldir
+	ld hl,ChooseLevel2
+	ld de,$86EC
+	ld bc,168
+	ldir
+	
+	ld b,2
+	ld c,2 ;xcor
+	ld a,18 ;ycor
+	ld h,0
+_level_loop:
+	push bc
+	ld b,5
+_drwlevelloop:
+	push hl
+	push bc
+	push bc
+	push af
+	ld b,a
+	ld e,h
+	ld d,0
+	ld hl,Levels_Won_Table
+	add hl,de
+	ld a,(hl)
+	or a
+	Call z,level_not_beaten
+	or a
+	call nz,level_beaten
+	;c = x
+	;b = y
+	Call PutSprite16
+	pop af
+	pop bc
+	ld b,19
+	push af
+	ld a,c
+	add a,b
+	ld e,a
+	pop af
+	pop bc
+	ld c,e
+	pop hl
+	inc h
+	djnz _drwlevelloop
+	pop bc
+	ld c,2
+	ld a,41
+	djnz _level_loop
+	xor a
+	ld (Level+2),a
+
+	Call DrawLevelBoxes
+	
+	Call Calculate_Level
+	ld hl,Levels_Won_Table
+	ld e,a
+	ld d,0
+	add hl,de
+	ld a,(hl)
+	or a
+	Call z,level_not_beatenx
+	or a
+	call nz,level_beatenx
+	ld a,(level_m2) ;xcor
+	ld c,a
+	add a,a
+	ld b,a
+	add a,a
+	add a,a
+	add a,a
+	add a,b
+	add a,c
+	inc a
+	inc a
+	ld c,a
+	ld a,(level_m)
+	ld e,a
+	add a,a
+	ld d,a
+	add a,a
+	ld b,a
+	add a,a
+	add a,a
+	add a,b
+	add a,d
+	add a,e
+	ld e,18
+	add a,e
+	ld b,a
+	Call PutSprite16
+	call gscopybuffer
+	Call Calculate_Level	
+	
+	ld a,1
+	out ($20),a
+	ld a,$FF
+	out (1),a
+	nop
+	ld a,$FE
+	out (1),a
+	nop
+	nop
+	in a,(1)
+	cp $FD
+	Call z,_optionleftx
+	ld a,$FF
+	nop
+	out (1),a
+	ld a,$FE
+	out (1),a
+	nop
+	nop
+	in a,(1)
+	cp $FB
+	Call z,_optionrightx	
+	
+	ld a,$FF
+	nop
+	out (1),a
+	ld a,$FE
+	out (1),a
+	nop
+	nop
+	in a,(1)
+	cp $F7
+	Call z,_optionUPx
+	ld a,$FF
+	nop
+	out (1),a
+	ld a,$FE
+	out (1),a
+	nop
+	nop
+	in a,(1)
+	cp $FE
+	Call z,_optionDOWNx
+	ld a,$FF
+	out (1),a
+	nop
+	ld a,$BF
+	out (1),a
+	nop
+	nop
+	in a,(1)
+	cp $DF
+	jp z,menu
+	ld a,$FF
+	out (1),a
+	nop
+	ld a,$BF
+	out (1),a
+	nop
+	nop
+	in a,(1)
+	cp $BF
+	jp z,title_screen
+	
+	jp Handle_Levels
+	
+_OptionUPx:
+	ld a,(level_m)
+	or a
+	ret z
+	dec a
+	ld (level_m),a
+	
+
+	ret
+_OptionDOWNx:
+	ld a,(level_m)
+	cp 1
+	ret z
+	inc a
+	ld (level_m),a
+	ret
+_OptionLeftx:
+	ld a,(level_m2)
+	or a
+	ret z
+	dec a
+	ld (level_m2),a
+
+	ret
+_OptionRightx:
+	ld a,(level_m2)
+	cp 4
+	ret z
+	inc a
+	ld (level_m2),a
+	ret
+Calculate_Level:
+	ld a,(level_m2)
+	ld b,a
+	ld a,(level_m) ; ycor 0-1
+	ld c,a
+	add a,a
+	add a,a
+	add a,c
+	add a,b
+	ret
+level_not_beaten:
+	pop hl
+	ld ix,incomp1
+	push ix
+	ld ix,incomp1
+	push ix
+	push hl
+	ret
+level_beaten:
+	pop hl
+	ld ix,comp1
+	push ix
+	ld ix,comp1
+	push ix
+	push hl
+	ret
+level_not_beatenx:
+	pop hl
+	ld ix,blankg
+	push ix
+	ld ix,incomp1
+	push ix
+	push hl
+	ret
+level_beatenx:
+	pop hl
+	ld ix,blankg
+	push ix
+	ld ix,comp1
+	push ix
+	push hl
+	ret	
+DrawLevelBoxes:
+	ld b,2
+	ld c,2
+	ld l,18+16+1
+DispLevel:
+	push bc
+	ld b,5
+_displevelz:
+	; c = x
+	;l = y
+	push bc
+	push hl
+	ld de,Level
+	Call _drw_score
+	pop hl
+	pop bc
+	ld a,19
+	add a,c
+	ld c,a
+	ld a,(Level+2)
+	inc a
+	ld (Level+2),a
+	djnz _displevelz
+	ld c,2
+	ld l,41+16+1
+	pop bc 
+	djnz DispLevel
+	ret
+Recallgame:
+	ld a,10
+	ld (PenCol),a
+	xor a	
+	ld (PenRow),a	
+	ld hl,Continue
+	bcall(_vputS)
+	ld a,10
+	ld (PenCol),a	
+	ld a,7
+	ld (PenRow),a
+	ld hl,Continue2
+	bcall(_vputS)	
+	
+	bcall(_getkey)
+	call gsClearbuffer
+	call gsEnable
+	ld a,$01
+	out ($20),a
+	ret
+
+Handle_Pattern:
+	push hl
+	push de
+	add a,a
+	add a,a
+	ld e,a
+	ld d,0
+	ld hl,Move_Table  ;first pointer is the xcor
+	add hl,de
+	pop de
+	push de
+	ld a,e
+	ld e,(hl)
+	inc hl
+	ld d,(hl)
+	push hl
+	ld l,a
+	ld h,0
+	add hl,de
+	ld a,(hl)
+	pop hl
+	;ld a,(de)
+	add a,c
+	ld c,a
+	inc hl
+	pop de
+	ld a,e
+	ld e,(hl)
+	inc hl
+	ld d,(hl)
+	ld l,a
+	ld h,0
+	add hl,de
+	ld a,(hl)
+	add a,b
+	ld b,a
+	pop hl
+	jp _Handle_cont
+	;implied ret
+
+;Handle_sidescroll:
+;
+;	ld a,(xcor)
+;	ld c,44
+;	cp c
+;	ret z
+;	jr c,ScrollL
+;ScrollR:  ;xcor > 44
+;	sub c
+;	srl a  ;divide 8
+;	srl a
+;	srl a
+;	or a
+;	ret z  ; 0 pixel scroll, return
+;	ld b,a
+;	push bc
+;_scrollr: ;right means, the screen moves left
+;	push bc
+;	ld hl,$9340+11
+;	ld b,64
+;	ld de,23
+;	call _RotateR
+;	ld hl,$86EC+11
+;	ld b,64
+;	ld de,23
+;	call _RotateR
+;	pop bc
+;	djnz _Scrollr
+;	pop bc
+;	ld a,%11111111
+;	ld c,0
+;_scroll_loopR:
+;	or a
+;	sla a
+;	rl c
+;	djnz _scroll_loopR
+;
+;	ld hl,$86EC+11
+;	ld b,64
+;	Call _fill_loop
+;	ret
+;
+;ScrollL:    ;xcor <44
+;	ld b,a
+;	ld a,c
+;	ld c,b
+;	sub c
+;	srl a
+;	srl a
+;	srl a
+;	or a
+;	ret z
+;	ld b,a
+;	push bc
+;_scrolll: ;right means, the screen moves left
+;	push bc
+;	ld hl,$9340
+;	ld b,64
+;	call _RotateL
+;	ld hl,$86EC
+;	ld b,64
+;	call _RotateL
+;	pop bc
+;	djnz _Scrolll
+;	
+;	pop bc
+;	ld a,%11111111
+;	ld c,0
+;_scroll_loopL:
+;	or a
+;	srl a
+;	rr c
+;	djnz _scroll_loopL
+;
+;	ld hl,$86EC
+;	ld b,64
+;	Call _fill_loop
+;	ret
+;
+;	
+;_fill_loop:
+;	ld a,(hl)
+;	or c
+;	ld (hl),a
+;	ld de,12
+;	add hl,de
+;	djnz _fill_loop	
+;	ret	
+;_RotateR:
+;;	or a
+;	sla (hl)
+;	dec hl
+;	rl (hl)
+;	dec hl
+;	rl (hl)
+;	dec hl
+;	rl (hl)
+;;	dec hl
+;	rl (hl)
+;	dec hl
+;	rl (hl)
+;	dec hl
+;;	rl (hl)
+;	dec hl
+;	rl (hl)
+;	dec hl
+;	rl (hl)
+;	dec hl
+;	rl (hl)
+;	dec hl
+;	rl (hl)
+;	dec hl
+;	rl (hl)
+;	add hl,de
+;	djnz _RotateR
+;	ret
+;_RotateL:
+;	or a
+;	srl (hl)
+;	inc hl
+;	rr (hl)
+;	inc hl
+;	rr (hl)
+;	inc hl
+;	rr (hl)
+;	inc hl
+;	rr (hl)
+;	inc hl
+;	rr (hl)
+;	inc hl
+;	rr (hl)
+;	inc hl
+;	rr (hl)
+;	inc hl
+;	rr (hl)
+;	inc hl
+;	rr (hl)
+;	inc hl
+;	rr (hl)
+;;	inc hl
+;	rr (hl)
+;	inc hl
+;	djnz _RotateL
+;	ret
+
+ReadOnKey:
+	in a,(4)
+	and %00001000
+	or a
+	ret nz
+	pop hl ;address
+	call gsdisable
+	ret
+
+Draw_Level:
+	ld a,(CurLevel)
+	ld hl,Level+2
+	ld (hl),a
+	
+	ld c,82
+	ld l,64-6
+	ld de,Level
+	Call _drw_score
+	ret
+	
+
+
+ChkHiScores:
+	ld hl,Hiscore1  ; top 3 scores
+	ld b,3
+	ld de,Score
+_chks:
+	push bc
+	ld b,5
+_chkscore:
+	push hl
+	ld a,(de)
+	ld c,(hl)
+	cp c
+	jr z,_nextdigit
+	jr c,_nextscore
+	; your score must be greater if the other jumps weren't taken
+	pop hl
+	pop bc
+	push bc
+	ld hl,Hiscore3
+	ld de,Hiscore4
+	ld a,5
+	Call Move_hiscoredata
+	pop bc
+	push bc
+	ld hl,UserC
+	ld de,UserD
+	ld a,13
+	Call Move_hiscoredata
+	
+	ld hl,Hiscore1
+	pop bc
+	ld a,3
+	sub b
+	push af
+	ld b,a
+	add a,a
+	add a,a
+	add a,b ;times 5
+	ld e,a
+	ld d,0
+	add hl,de
+	ld de,Score
+	ex de,hl
+	ld bc,5
+	ldir
+	;pop af
+   Call gsDisable
+    ld hl,$9340
+	ld de,$9340+1
+	ld (hl),0
+	ld bc,768
+	ldir
+	pop af
+	Call getstr
+	
+	ret
+_nextdigit:
+	pop hl
+	inc de
+	inc hl
+	djnz _chkscore
+	;inc hl ; next score
+	ld de,Score
+	pop bc
+	djnz _chks
+	ret
+_nextscore:
+	pop hl
+_nxtscr:
+	inc hl
+	djnz _nxtscr
+	ld de,Score
+	pop bc
+	djnz _chks
+	ret
+
+Move_hiscoredata:
+_movescores:
+	push bc
+	push hl
+	push de
+	ld c,a
+	ld b,0
+	ldir
+	pop de
+	pop hl
+	ld c,a
+	ld b,0
+	or a
+	sbc hl,bc
+	
+	ex de,hl
+	or a
+	sbc hl,bc
+	ex de,hl
+	
+	pop bc
+	djnz _movescores
+	ret
+	
+getstr:	
+	ld hl,UserA
+	ld c,a
+	add a,a
+	add a,a
+	ld b,a
+	add a,a
+	add a,b
+	add a,c
+	ld e,a
+	ld d,0
+	add hl,de
+	push hl
+	call gsdisable
+	ld hl,$9340
+	ld de,$9340+1
+	ld bc,767
+	ld (hl),0
+	ldir	
+	xor a
+	ld (PenCol),a
+	ld (PenRow),a
+	ld hl,Winner
+	bcall(_VPUTS)
+	xor a
+	ld (PenCol),a
+	ld a,10
+	ld (PenRow),a
+	ld hl,Winner2
+	bcall(_VPUTS)
+	xor a
+	ld (PenCol),a
+	ld a,20
+	ld (PenRow),a
+	ld hl,Winner3
+	bcall(_VPUTS)	
+	Call fastcopyfx	
+	ld a,7
+	ld (Currow),a
+	ld a,1
+	ld (CurCol),a
+	ld hl,Menux
+	bcall(_PutS)
+
+	ld a,5
+	ld (Currow),a
+	
+    RES   AppTextSave, (IY + AppFlags)
+    LD    HL, bufferfx     ; Init pointer
+    XOR   A
+    LD    B, A           ; Init character counter
+    LD    (CurCol), A
+
+KeyLoop:
+    EX    DE, HL         ; Get a character
+    bcall(_GetCSC)
+    EX    DE, HL
+    OR    A             ; If no character recieved, restart
+    JR    Z, KeyLoop
+
+    CP    $36      ; If [ENTER] pressed, exit
+    JR    NZ, NotEnter
+
+    LD    (HL), 0       ; Null-terminate buffer
+		
+	pop de
+	inc de
+	inc de
+	;push bc
+	inc b
+	ld hl,bufferfx
+	ld c,b
+	ld b,0
+	ldir
+	Call gsEnable
+	pop hl ; address
+	pop hl
+	Call SetUpGame
+	jp Hiscoretable
+NotEnter:
+    LD    C, A          ; Save input char temporarily
+    LD    A, B          ; See if max number of characters input
+    CP    10
+    JR    Z, KeyLoop
+    LD    A, C          ; Restore char
+
+    SUB   $0A       ; Throw out all keys below [+]
+    JR    C, KeyLoop
+    CP    $2F - $0A + 1    ; Throw out all keys above [MATH]
+    JR    NC, KeyLoop
+
+    PUSH  HL           ; Convert scan code into character
+    LD    H, 0
+    LD    L, A
+    LD    DE, CharTable
+    ADD   HL, DE
+    LD    A, (HL)
+    POP   HL
+
+    bcall(_PutC)      ; Echo it
+
+    LD    (HL), A       ; Write char to buffer
+    INC   HL          ; Increment pointer
+    INC   B           ; Increment char counter
+
+    JR    KeyLoop
+
+
+Setupgame:
+	ld hl,layer1
+	ld de,buffer1
+	ld bc,768
+	ldir
+	ld hl,layer2
+	ld de,buffer2
+	ld bc,768
+	ldir
+	ld a,5
+	ld (Lives),a
+	ld a,63
+	ld (_ptr),a
+	ld a,40
+	ld (xcor),a
+	ld a,64-8
+	ld (ycor),a
+	xor a
+	ld (Background_C),a
+	ld (Bullet_C),a
+	ld (Bullet_D_C),a
+	ld (object_ptr),a
+	ld (Objects_on_screen),a
+	ld (next_obj),a
+	ld (invul_C),a
+	ld (PowerUp),a
+	ld (Ammo),a
+	ld (option_num),a
+	ld (level_m),a
+	ld (level_m2),a	
+	ld (Ally_Timer),a
+	
+	ld hl,Score
+	ld (hl),0
+	ld de,Score+1
+	ld bc,4
+	ldir
+	
+	ld a,10
+	ld (Level),a
+	ld (Level+1),a
+	ld (Level+2),a
+	ld (Level+3),a
+	ld (Level+4),a
+	
+	
+	ld bc,32*8-1
+	ld hl,object_Table
+	ld (hl),0
+	ld de,object_Table+1
+	ldir
+
+	
+	ld bc,32*4-1
+	ld hl,Bullet_Table
+	ld (hl),0
+	ld de,Bullet_Table+1
+	ldir
+	ret
+Draw_ally:
+	ld a,(ally_timer)
+	or a
+	ret z
+	ld a,(allyy)
+	ld l,a
+	ld a,(allyx)
+	ld b,8
+	ld ix,allyShip
+	;ld (ix+8),SpaceShip_mask
+	ld de,$9340
+	Call PutSpriteXOR
+	ld a,(allyy)
+	ld l,a
+	ld a,(allyx)
+	ld b,8
+	ld ix,allyShip2
+	;ld (ix+8),SpaceShip_mask
+	ld de,$86EC
+	Call PutSpriteXOR
+	ret		
+Handle_Ally:
+	ld a,(Ally_Timer)
+	or a
+	ret z
+	cp 89
+	jr c,Allyr
+	cp 177
+	jr c,Allyl
+	
+Allyr:	
+	ld a,(allyx)
+	inc a
+	ld (allyx),a
+	jr _nextally
+Allyl:
+	ld a,(allyx)
+	dec a
+	ld (allyx),a
+_nextally:
+	ld a,(ally_timer)
+	inc a
+	cp 177
+	jr nz,_allynoreset
+	xor a
+_allynoreset:
+	ld (ally_timer),a
+	and 15
+	or a
+	ret nz
+	ld a,(allyx)
+	ld b,2
+	add a,b
+	ld d,a
+	ld a,(allyy)
+	ld b,4
+	sub b
+	ld e,a
+	ld c,3
+	Call _create_bullet
+	ret
+	
+Player_Enemy_Collision:
+	ld hl,Object_Table
+	ld b,32
+character_to_enemy:
+	push bc
+	push hl
+	ld a,(hl)
+	or a
+	jr z,Skip_Enemy
+	inc hl
+	push hl
+	ld de,5
+	add hl,de
+	ld b,(hl)
+	pop hl
+
+	;dec hl
+
+	;inc hl
+	ld a,(xcor)
+	ld c,a
+	ld a,(hl)
+
+	Call CollisionChk8
+	cp COLLISION
+	jr nz,Skip_Enemy
+	inc hl
+	ld a,(ycor)
+	ld c,a
+	ld a,(hl)
+
+	Call CollisionChk8	
+	cp COLLISION	
+	jr nz,Skip_Enemy
+	dec hl \ dec hl
+	ld a,(hl)
+	add a,a
+	ld hl,CE_Collision_Table
+	ld e,a
+	ld d,0
+	add hl,de
+	ld e,(hl)
+	inc hl
+	ld d,(hl)
+	ld hl,skip_enemy
+	push hl
+	push de
+	ret
+	
+	
+
+Skip_Enemy:
+	pop hl
+	pop bc
+	ld de,8
+	add hl,de
+	djnz character_to_enemy
+	ret
+	
+CEcollision1:
+	ld a,(Invul_C)
+	or a
+	ret nz
+	;ld (hl),0	
+	;ld a,(Objects_on_Screen)
+	;dec a
+	;ld (Objects_on_Screen),a
+	ld a,(Lives)
+	dec a
+	ld (Lives),a
+	ld a,1
+	ld (Invul_C),a
+	ret
+CEcollision2:
+	ld a,1
+	ld (PowerUp),a ;1 = double shot
+	ld a,20
+	ld (Ammo),a
+	pop bc ;address
+	pop hl
+	push hl
+	push bc
+	ld (hl),0
+	ld a,(Objects_on_Screen)
+	dec a
+	ld (Objects_on_screen),a
+	ret
+CEcollision3:
+	pop bc ;address
+	pop hl
+	push hl
+	push bc
+	ld (hl),0
+	ld a,(Objects_on_Screen)
+	dec a
+	ld (Objects_on_screen),a
+	ld a,(Lives)
+	inc a
+	ld (Lives),a
+	ret
+CECollision4:
+	pop bc ;address
+	pop hl
+	push hl
+	push bc
+	ld (hl),0
+	ld a,(Objects_on_Screen)
+	dec a
+	ld (Objects_on_screen),a
+	
+	ld a,1
+	ld (Ally_Timer),a
+	
+	xor a
+	ld (allyx),a
+	ld a,64-8
+	ld (allyy),a
+	ret
+CEcollision5:
+	ld a,2
+	ld (PowerUp),a ;1 = triple shot
+	ld a,20
+	ld (Ammo),a
+	pop bc ;address
+	pop hl
+	push hl
+	push bc
+	ld (hl),0
+	ld a,(Objects_on_Screen)
+	dec a
+	ld (Objects_on_screen),a
+	ret
+CollisionScore_Calc:
+	;destroys hl, a, b
+	ld a,c
+	add a,a
+	add a,a
+	add a,c ; times 5
+	push de
+	ld e,a
+	ld d,0
+	ld hl,Score_Table
+	add hl,de
+	ld bc,5
+	ld de,Add
+	ldir
+	Call Calculate_Score
+	pop de
+	ret
+CreateExplosion:
+	;de = on stack
+	ld a,(obj_tbl_ptr)
+	add a,a
+	add a,a
+	ld e,a
+	ld d,0
+	ld hl,Object_Table
+	add hl,de
+	add hl,de
+	pop bc
+	pop de
+	push de
+	push bc
+	ld (hl),5
+	inc hl
+	inc de
+	ld a,(de) ;xcor
+	ld (hl),a
+	inc hl
+	inc de
+	ld a,(de) ;ycor
+	ld (hl),a
+	inc hl
+	ld (hl),0
+	ld de,3
+	add hl,de
+	ld (hl),8
+	inc hl
+	ld (hl),1
+	ret
+
+	
+CreatePowerUp:
+; b = image_Value
+;
+	push de
+	ld (hl),b
+	inc de
+	inc hl
+	ld a,(de)
+	ld (hl),a
+	inc hl
+	inc de
+	ld a,(de)
+	ld (hl),a
+	inc hl
+	inc hl
+	inc hl
+	inc hl
+	ld (hl),8
+	ld a,(objects_on_screen)
+	inc a
+	ld (objects_on_screen),a
+	
+	ld a,(obj_tbl_ptr)
+	inc a
+	and 31
+	ld (obj_tbl_ptr),a
+	pop de
+	ret
+HandleCollision_Lives:
+	;registers affected : returns 'A' as the number of lives left 
+	
+	ld (hl),0   ; deletes bullet
+	;dec hl \ dec de	
+	;dec hl \ dec de
+	push hl
+	ld hl,7
+	add hl,de
+	ex de,hl
+
+	ld a,(de)  ; subtracts a life
+	dec a
+	ld (de),a
+	ld hl,-7
+	add hl,de
+	ex de,hl
+	pop hl	
+	ret
+Collision5:
+	pop ix ;address
+	pop de
+	pop hl
+	pop bc
+	ld b,1
+	push bc
+	push hl
+	push de
+	push ix
+
+	Call HandleCollision_Lives
+	or a
+	ret nz  ; return if there are more than 1 live(s)
+
+	ld a,(de)
+	ld c,a
+	xor a	
+	ld (de),a
+	Call CollisionScore_Calc  ; uses 'C' for a table to find what score you get for the kill
+	
+	push de
+	Call CreateExplosion
+	pop de
+	
+	ld a,(obj_tbl_ptr)
+	inc a
+	and 31
+	ld (obj_tbl_ptr),a	
+	
+	Call ionrand
+	and 4
+	or a
+	ret nz
+	ld b,11
+	inc hl
+	Call CreatePowerUp
+	ret
+Collision7:
+	; hl = Bullet_Table	
+	; de = Object_Table
+	pop ix ;address
+	pop de
+	pop hl
+	pop bc
+	ld b,1
+	push bc
+	push hl
+	push de
+	push ix
+
+	call HandleCollision_Lives
+	or a
+	ret nz
+	ld a,(de)
+	ld c,a
+	xor a	
+	ld (de),a
+	Call CollisionScore_Calc ;destroys hl,b ,a
+	ld b,21
+	push de
+	ld a,(obj_tbl_ptr)
+	add a,a
+	add a,a
+	ld e,a
+	ld d,0
+	ld hl,Object_Table
+	add hl,de
+	add hl,de
+	pop de
+	Call CreatePowerUp
+	inc hl
+	ld (hl),3
+	inc hl
+	ld b,23
+	Call CreatePowerUp
+	inc hl
+	ld (hl),3
+	inc hl
+	ld b,22
+	Call CreatePowerUp
+	inc hl
+	ld (hl),3
+	ld a,(objects_on_screen)
+	dec a
+	ld (objects_on_screen),a
+	ret
+	
+Collision6:
+	pop ix ;address
+	pop de
+	pop hl
+	pop bc
+	ld b,1
+	push bc
+	push hl
+	push de
+	push ix
+
+	call HandleCollision_Lives
+	or a
+	ret nz
+	ld a,(de)
+	ld c,a
+	xor a	
+	ld (de),a
+	Call CollisionScore_Calc
+	push de
+	ld a,(obj_tbl_ptr)
+	add a,a
+	add a,a
+	ld e,a
+	ld d,0
+	ld hl,Object_Table
+	add hl,de
+	add hl,de
+	pop de
+	ld (hl),1
+	inc hl
+	inc de
+	ld a,(de)
+	ld b,5
+	sub b
+	ld (hl),a
+	inc hl
+	inc de
+	ld a,(de)
+	ld (hl),a
+	inc hl
+	ld (hl),20
+	inc hl
+	ld (hl),0
+	inc hl
+	inc hl
+	ld (hl),8
+	inc hl
+	ld (hl),1
+	inc hl ;next obj
+
+
+	
+	ld (hl),16
+	inc hl
+	dec de
+	ld a,(de)
+	ld b,5
+	add a,b
+	ld (hl),a
+	inc hl
+	inc de
+	ld a,(de)
+	ld (hl),a
+	inc hl
+	ld (hl),20
+	inc hl
+	ld (hl),0
+	inc hl
+	inc hl
+	ld (hl),8
+	inc hl
+	ld (hl),1
+	
+	ld a,(obj_tbl_ptr)
+	inc a
+	inc a
+	and 31
+	ld (obj_tbl_ptr),a	
+	ld a,(objects_on_screen)
+	inc a
+	ld (objects_on_Screen),a
+	ret
+	
+Collision1:
+	; hl = Bullet_Table	
+	; de = Object_Table
+	pop ix ;address
+	pop de
+	pop hl
+	pop bc
+	ld b,1
+	push bc
+	push hl
+	push de
+	push ix
+
+	call HandleCollision_Lives
+	or a
+	ret nz
+	ld a,(de)
+	ld c,a
+	xor a	
+	ld (de),a
+	Call CollisionScore_Calc ;destroys hl,b ,a
+	
+	push de
+	Call CreateExplosion
+	pop de
+	
+	ld a,(obj_tbl_ptr)
+	inc a
+	and 31
+	ld (obj_tbl_ptr),a	
+	
+	Call ionrand
+	and 15
+	or a
+	Call z,LdB_7
+	cp 1
+	Call z,LdB_12
+	inc hl ;next obj
+	cp 2
+	Call z,LdB_19
+	cp 3
+	ret nc
+
+	Call CreatePowerUp
+	ret
+LdB_7:
+	ld b,7
+	ret
+LdB_12:
+	ld b,12
+	ret
+LdB_19:
+	ld b,19
+	ret
+
+Collision3:
+	ret
+Handle_Invul:
+	ld a,(Invul_C)
+	or a
+	jr z,drwshp
+	push af
+	and 1
+	cp 1
+	jr z,_invul
+		;1
+	Call Draw_Ship
+_invul:
+	pop af
+	inc a
+	and 127
+	ld (Invul_C),a
+	ret
+drwshp:
+	Call Draw_Ship
+	ret
+	
+	
+
+
+Draw_Lives:
+	ld a,(Lives)
+	ld b,a
+_drwl:
+	;push af
+	push bc
+	ld a,b
+	add a,a
+	ld  b,a
+	add a,a
+	add a,b ;times 6
+	ld b,2
+	add a,b
+	ld l,1
+	ld b,5
+	ld de,$9340
+	ld ix,life
+	push af
+	push hl
+	Call PutSpriteXOR
+	pop hl
+	pop af
+	ld b,5
+	ld de,$86EC
+	ld ix,life2
+	Call PutSpriteXOR
+	pop bc
+	;pop af
+	djnz _drwl
+	ret
+	
+
+
+Draw_Score:
+	ld de,Score
+	ld c,70
+	ld l,1
+	Call _drw_score
+	ret
+	
+	
+	
+_drw_Score:
+	ld b,5
+	; c = xcor 
+	;l = ycor
+_draws:
+	push de
+	push hl
+	push bc
+	push hl
+	ld hl,Number_Table
+	ld a,(de)
+	add a,a
+	ld e,a
+	ld d,0
+	add hl,de
+	ld e,(hl)
+	inc hl
+	ld d,(hl)
+	push de
+	pop ix
+	ld a,5
+	sub b
+	ld c,a
+	add a,a
+	add a,a ;*4
+	
+	pop hl ; l = ycor
+	pop bc
+	push bc
+	add a,c
+
+	push hl
+	push af
+	ld b,5
+	push ix
+	ld de,$9340
+	Call PutSpriteXOR
+	pop ix 
+	pop af
+	pop hl
+	ld de,$86EC
+	ld b,5
+	Call PutSpriteXOR
+	pop bc
+	pop hl
+
+	pop de
+	inc de
+	djnz _draws
+	ret
+
+Calculate_Score:
+   ; Call SideBar_Score
+	or a
+;digit 1
+	ld a,(Add+4)
+	ld b,a
+	ld a,(Score+4)
+	add a,b   
+    cp 10	
+	jr c, Tens_Digit   ;  if carry flag is SET than a is less than 10
+	push af
+	ld a,(Score+3)
+	inc a
+	ld (Score+3),a
+	pop af
+	ld b,10
+	sub b
+Tens_Digit:
+    ld (Score+4),a
+	or a
+	ld a,(Add+3)
+    ld b,a	
+	ld a,(Score+3)
+	add a,b
+	cp 10
+	jr c,Hundreds_Digit
+	push af
+	ld a,(Score+2)
+	inc a
+	ld (Score+2),a
+	pop af
+	ld b,10
+	sub b
+Hundreds_Digit:
+    ld (Score+3),a
+	or a
+	ld a,(Add+2)
+	ld b,a
+	ld a,(Score+2)
+	add a,b
+	cp 10
+    jr c,Thosnds_Digit
+	push af
+	ld a,(Score+1)
+	inc a
+	ld (Score+1),a
+	pop af
+	ld b,10
+	sub b
+Thosnds_Digit:
+    ld (Score+2),a
+	or a
+	ld a,(Score+1)
+	cp 10
+	jr c,Tenthousands_Digit
+	push af
+	ld a,(Score)
+	inc a
+	ld (Score),a
+	pop af
+	ld b,10
+	sub b
+Tenthousands_Digit:
+    ld (Score+1),a
+	ret
+	
+ChkLives:
+	ld a,(Lives)
+	or a
+	jp m,endprog
+	ret nz
+endprog:
+	pop hl
+_keyloop:
+	Call Handle_Background
+	Call Handle_Objects
+	Call MoveBullets
+	Call Handle_background
+	Call DrawBullets
+	Call Draw_Objects
+	Call Draw_Score
+	;Call Draw_Lives
+
+	ld hl,Image2_Layer1
+	ld de, $9340 + ( 27 * 12)
+	ld bc, 132
+	ldir
+	ld hl,Image2_Layer2
+	ld de, $86EC + ( 27 * 12)
+	ld bc, 132
+	ldir
+	Call gsCopyBuffer
+	ld a,$FF
+	out (1),a
+	nop
+	nop
+	ld a,$FD
+	out (1),a
+	nop
+	nop
+	in a,(1)
+	cp $FE
+	jr nz,_keyloop
+	xor a
+	ld (session),a
+	
+	Call ChkHiScores
+	Call SetUpGame
+	jp _start
+CollisionChk:
+;PARAMETERS
+;a = object cor
+;c = bullet cor
+;b = width and height
+	cp c
+	jr z,_Collision
+	jr c,a_less_c
+a_greater_c:
+	sub c
+	cp 4 ;4
+	jr c,_Collision
+	xor a
+	ret
+a_less_c:
+	push bc
+	ld b,a
+	ld a,c
+	ld c,b ; flip
+	sub c
+	pop bc
+	cp b
+	jr c,_Collision
+	xor a
+	ret	
+_Collision:
+	ld a,COLLISION
+	ret
+	
+CollisionChk8:
+;PARAMETERS
+;a = object cor
+;c = bullet cor
+	cp c
+	jr z,_Collision
+	jr c,a_less_c8
+a_greater_c8:
+	sub c
+	cp 8 ;4
+	jr c,_Collision
+	xor a
+	ret
+a_less_c8:
+	push bc
+	ld b,a
+	ld a,c
+	ld c,b ; flip
+	sub c
+	pop bc
+	cp b
+	jr c,_Collision
+	xor a
+	ret	
+
+;(hl) = object pic pointer;(hl+1) = xcor;(hl+2) = ycor;same with de
+BulletCollisionChk:	
+	ld a,(bulletcol_C)
+	or a
+	jr z,_bulletcont_handle
+	inc a
+	and 01
+	ld (bulletcol_C),a
+	ret
+	
+_bulletcont_handle:
+	inc a
+	ld (bulletcol_C),a
+
+	ld hl,Bullet_Table	
+	ld de,Object_Table	
+	ld b,32
+_c:	
+	push bc		
+	push de	
+	push hl	
+	ld a,(hl)	
+	or a	
+	jr z,_c_next_bullet		
+	ld b,32
+_cc:	
+	push bc	
+	push hl	
+	push de	
+	ld a,(de)	
+	or a	
+	jr z,_cnextobj
+	
+	push hl
+	ld hl,6
+	add hl,de
+	ld b,(hl)  ;argument for collisionchk
+	ld de,-6
+	add hl,de
+	ex de,hl
+	pop hl
+	push hl
+	inc hl
+	inc hl
+	inc hl
+	ld a,(hl)
+	cp UP
+	jr z,object_to_bullet
+	pop hl
+	jr _cnextobj
+
+object_to_bullet:
+	pop hl
+	inc hl	
+	inc de	
+	ld a,(de)	
+	ld c,(hl)	
+	
+	Call CollisionChk ; compares the x coordinates via "C" and "A"	
+	cp COLLISION	
+	jr nz,_cnextobj	
+	inc hl	
+	inc de	
+	ld a,(de)	
+	ld c,(hl)	
+	Call CollisionChk	
+	cp COLLISION	
+	jr nz,_cnextobj	
+	pop de
+	pop hl
+	push hl
+	push de
+	ld a,(de)
+	add a,a
+	ld e,a
+	ld d,0
+	ld hl,Collision_Table
+	add hl,de
+	ld e,(hl)
+	inc hl
+	ld d,(hl)
+	ld hl,_Cnextobj
+	push hl 
+	push de  ; calls, all registers destroyed, must be removed from the stack at beginning of code
+	ret
+	
+	
+_cnextobj:	
+	pop de	
+	pop hl	
+	pop bc	
+	push hl	
+	ld hl,8
+	add hl,de	
+	ex de,hl	
+	pop hl	
+	djnz _cc
+_c_next_bullet:	
+	pop hl	
+	ld de,4	
+	add hl,de	
+	pop de	
+	pop bc	
+	djnz _c	
+	ret
+	
+PlayerCollisionChk:
+	ld a,(Invul_C)
+	or a
+	ret nz
+	ld a,(playercol_C)
+	or a
+	jr z,_playercont_handle
+	inc a
+	and 01
+	ld (playercol_C),a
+	ret
+	
+_playercont_handle:
+	inc a
+	ld (playercol_C),a
+	
+	ld hl,Bullet_Table
+	ld b,32
+character_to_bullet:
+	push hl
+	push bc
+	ld a,(hl)
+	or a
+	jr z,Skip_Bullet
+	inc hl
+	inc hl
+	inc hl
+	ld a,(hl)
+	cp DOWN
+	jr nz,Skip_Bullet
+	dec hl
+	dec hl
+	;dec hl
+
+	;inc hl
+	ld c,(hl)
+	ld a,(xcor)
+	ld b,8
+	Call CollisionChk
+	cp COLLISION
+	jr nz,Skip_Bullet
+	inc hl
+	ld c,(hl)
+	ld a,(ycor)
+	ld b,8
+	Call CollisionChk	
+	cp COLLISION	
+	jr nz,Skip_Bullet
+	dec hl \ dec hl
+	ld (hl),0	
+	ld a,(Lives)
+	dec a
+	ld (Lives),a
+	ld a,1
+	ld (Invul_C),a
+Skip_Bullet:
+	pop bc
+	pop hl
+	ld de,4
+	add hl,de
+	djnz character_to_bullet
+	ret
+
+Getkeys:
+	ld a,$FF
+	out (1),a
+	nop
+	ld a,$BF
+	out (1),a
+	nop
+	nop
+	in a,(1)
+	cp $BF
+	jp z,Endprog
+	ld a,$FF
+	out (1),a
+	nop
+	ld a,$FE
+	out (1),a
+	nop
+	nop
+	in a,(1)
+	cp $FD
+	Call z,_Left
+	ld a,$FF
+	nop
+	out (1),a
+	ld a,$FE
+	out (1),a
+	nop
+	nop
+	in a,(1)
+	cp $FB
+	Call z,_Right
+	ld a,$FF
+	nop
+	out (1),a
+	ld a,$FE
+	out (1),a
+	nop
+	nop
+	in a,(1)
+	cp $F7
+	Call z,_Up
+	ld a,$FF
+	nop
+	out (1),a
+	ld a,$FE
+	out (1),a
+	nop
+	nop
+	in a,(1)
+	cp $FE
+	Call z,_Down
+	ld a,$FF
+	out (1),a
+	ld c,1
+	ld b,UP
+	ld a,$BF
+	out (1),a
+	nop
+	nop
+	in a,(1)
+	cp $DF
+	Call z,CreateBullet
+	ld c,0
+	ret
+	
+Handle_Bullet_D_C:
+	ld a,(Bullet_D_C)
+	or a
+	ret z
+	inc a
+	and 07
+	ld (Bullet_D_C),a
+	ret
+CreateBullet:
+	ld a,(Bullet_D_C)
+	or a
+	ret nz
+	inc a
+	ld (Bullet_D_C),a
+
+	ld a,(PowerUp)
+	cp 1
+	jr z,TwoBullets
+	cp 2
+	jr z,ThreeBullets
+OneBullet:
+	ld c,1
+	xor a
+	ld (PowerUp),a
+	ld a,(xcor)
+	ld b,2
+	add a,b
+	ld d,a
+	ld a,(ycor)
+	ld b,4
+	sub b
+	ld e,a
+	Call _create_bullet
+	ret
+TwoBullets:
+	ld a,(Ammo)
+	or a
+	jr z,OneBullet
+	ld a,(xcor)
+	ld b,2
+	sub b
+	ld d,a
+	ld a,(ycor)
+	ld b,4
+	sub b
+	ld e,a
+	ld c,6
+	Call _create_Bullet
+	ld a,(xcor)
+	ld b,6
+	add a,b
+	ld d,a
+	ld a,(ycor)
+	ld b,4
+	sub b
+	ld e,a
+	ld c,6
+	Call _create_Bullet
+	ld a,(Ammo)
+	dec a
+	ld (Ammo),a
+	ret
+ThreeBullets:
+	ld a,(Ammo)
+	or a
+	jr z,OneBullet
+	ld a,(xcor)
+	inc a
+	inc a
+	ld d,a
+	ld a,(ycor)
+	ld e,a
+	ld c,4
+	Call _create_Bullet
+	ld a,(xcor)
+	inc a
+	inc a
+	ld d,a
+	ld a,(ycor)
+	ld e,a
+	ld c,5
+	Call _create_Bullet
+	ld a,(xcor)
+	inc a
+	inc a
+	ld d,a
+	ld a,(ycor)
+	ld e,a
+	ld c,6
+	Call _create_Bullet
+	ld a,(Ammo)
+	dec a
+	ld (Ammo),a
+	ret	
+	
+
+;PARAMETERS
+;c = bullet pointer
+;b = direction
+;d = xcor
+;e = ycor
+_create_bullet:
+
+	ld a,(Bullet_C)
+	push af
+	push de
+	ld hl,Bullet_Table
+	add a,a
+	add a,a
+	ld e,a
+	ld d,0
+	add hl,de
+	pop de
+	ld (hl),c  ; will be eventually passed as a parameter
+	inc hl
+	ld a,d  ;xcor
+	;ld b,2
+	;add a,b
+	ld (hl),a
+	inc hl
+	ld a,e ;ycor
+	;ld b,4
+	;sub b
+	ld (hl),a
+	inc hl
+	ld (hl),UP ; b always up
+	pop af
+	inc a
+	and 31
+	ld (Bullet_C),a
+	ret
+CreateEnemyBullet:
+;c = xcor
+;b = ycor
+	push de
+	ld a,(Bullet_C)
+	add a,a
+	add a,a
+	ld e,a
+	ld d,0
+	ld hl,Bullet_Table
+	add hl,de
+	ld (hl),2
+	inc hl
+	ld a,2
+	add a,c
+	ld (hl),a
+	inc hl
+	ld a,9
+	add a,b
+	ld (hl),a
+	inc hl
+	ld (hl),DOWN
+	
+	ld a,(Bullet_C)
+	inc a
+	and 31
+	ld (Bullet_C),a
+	pop de
+	ret
+	
+MoveBullets:
+	ld b,32
+	ld hl,Bullet_Table
+_mbullets:
+	push hl
+	ld a,(hl)
+	or a
+	jr z,next_mbullet
+	add a,a
+	ld hl,bullet_move_table
+	ld e,a
+	ld d,0
+	add hl,de
+	ld e,(hl)
+	inc hl
+	ld d,(hl)
+
+	ld hl,next_mbullet
+	push hl
+	push de
+	ret
+next_mbullet:
+	pop hl
+	ld de,4
+	add hl,de
+	djnz _mbullets
+	ret	
+	
+TaskBullet2:
+	pop de
+	pop hl
+	push hl
+	push de
+	inc hl
+	ld a,(hl)
+	dec a
+	ld (hl),a
+	inc hl
+	or a
+	Call z,Reset_B
+	ld a,(hl)
+	dec a
+	dec a
+	ld (hl),a
+	or a
+	Call m,Reset_B
+	ret
+TaskBullet3:
+	pop de
+	pop hl
+	push hl
+	push de
+	inc hl
+	ld a,(hl)
+	inc a
+	ld (hl),a
+	inc hl
+	cp 96-4
+	Call z,Reset_B
+	ld a,(hl)
+	dec a
+	dec a
+	ld (hl),a
+	or a
+	Call m,Reset_B
+	ret
+TaskBullet4:
+	pop de
+	pop hl
+	push hl
+	push de
+	inc hl
+	inc hl
+	ld a,(hl)
+	dec a
+	dec a
+	ld (hl),a
+	or a
+	Call m,Reset_B
+	ret
+Reset_B:
+	dec hl
+	dec hl
+	ld (hl),0
+	inc hl
+	inc hl
+	ret
+	
+	
+TaskBullet1:
+	pop de
+	pop hl
+	push hl
+	push de
+	
+	inc hl
+	inc hl
+	inc hl
+	ld a,(hl)
+	cp UP
+	jr z,_bulletup
+	;ret
+_bulletdown:
+	dec hl
+	ld a,(hl)
+	inc a
+	ld (hl),a
+	cp 63
+	ret nz
+	dec hl
+	dec hl
+	ld (hl),0 ;reset bullet	
+	ret
+_bulletup:
+	dec hl
+	ld a,(hl)
+	dec a
+	ld (hl),a
+	or a
+	ret nz
+	dec hl
+	dec hl
+	ld (hl),0 ;reset bullet
+	ret
+	
+DrawBullets:
+	ld b,32
+	ld hl,Bullet_Table
+_dbullets:
+	push bc
+	push hl
+	ld a,(hl)
+	or a
+	jr z,next_dbullet
+	
+	add a,a
+	push hl
+	ld hl,Bullet_Pic_Table2
+	ld e,a
+	ld d,0
+	add hl,de
+	ld e,(hl)
+	inc hl
+	ld d,(hl)
+	pop hl
+	push de
+	push hl
+	ld hl,Bullet_Pic_Table
+	ld e,a
+	ld d,0
+	add hl,de
+	ld e,(hl)
+	inc hl
+	ld d,(hl)	
+	pop hl
+	push de
+	
+	inc hl
+	ld a,(hl)
+	inc hl
+	ld l,(hl)
+	ld b,4
+	pop ix
+	push af
+	push hl
+	ld de,$9340
+	Call PutSpriteXOR
+	pop hl
+	pop af
+	ld b,4
+	ld de,$86EC
+	pop ix
+	Call PutSpriteXOR
+next_dbullet:
+	pop hl
+	pop bc
+	ld de,4
+	add hl,de
+	djnz _dbullets
+	ret
+_Left:
+	Call Left
+	Call Left
+	ret
+Left:
+	;ld b,8
+	;ld a,(xcor)
+	;ld c,44
+	;cp c
+	;Call c,_Left_Inc
+
+	ld a,(xcor)
+	cp 8
+	ret z
+	dec a
+	ld (xcor),a
+	ret
+_Right:
+	Call Right
+	Call Right
+	ret
+Right:
+	;ld b,96-8-8
+	;ld a,(xcor)
+	;ld c,44
+	;cp c
+	;Call nc,_Right_Inc
+	
+	ld a,(xcor)
+	cp 96-8-8
+	ret z
+	inc a
+	ld (xcor),a
+	ret
+_Up:
+	ld a,(ycor)
+	cp 20
+	ret z
+	dec a
+	ld (ycor),a
+	ret
+_Down:
+	ld a,(ycor)
+	cp 64-8
+	ret z
+	inc a
+	ld (ycor),a
+	ret
+Handle_background:
+	ld a,(BackGround_C)
+	cp 6
+	jr z,DrwBG
+	inc a
+	ld (BackGround_C),a
+	Call gsCopyBackground
+	ret
+DrwBG:
+    xor a
+	ld (BackGround_C),a
+	
+	ld de,Buffer1
+	ld hl,Layer1
+	Call _scrollUp
+	ld a,(_ptr)
+	dec a
+	ld (_ptr),a
+	ld de,Buffer2
+	ld hl,Layer2
+	Call _scrollUp
+	Call gsCopyBackground
+	ret	
+gsCopybackground:
+	ld hl,buffer1
+	ld de,gbuf1
+	ld bc,768
+	call gsCopy
+
+	ld hl,buffer2
+	ld de,gbuf2
+	ld bc,768
+	jp gsCopy
+Draw_Ship:
+	ld a,(ycor)
+	ld l,a
+	ld a,(xcor)
+	ld b,8
+	ld ix,SpaceShip
+	;ld (ix+8),SpaceShip_mask
+	ld de,$9340
+	Call PutSpriteXOR
+	ld a,(ycor)
+	ld l,a
+	ld a,(xcor)
+	ld b,8
+	ld ix,SpaceShip2
+	;ld (ix+8),SpaceShip_mask
+	ld de,$86EC
+	Call PutSpriteXOR
+	ret
+Create_New_Enemies:
+	ld a,(Objects_on_screen)
+	or a
+	ret nz
+	;ld bc,32*4-1
+	;ld hl,Bullet_Table
+	;ld (hl),0
+	;ld de,Bullet_Table+1
+	;ldir	
+	
+	
+	ld a,(CurLevel)
+	add a,a
+	ld hl,Level_Creation_Table
+	ld e,a
+	ld d,0
+	add hl,de
+	ld e,(hl)
+	inc hl
+	ld d,(hl)
+	
+	ld a,(object_ptr)
+	inc a
+	ld (object_ptr),a
+	ld hl,Object_creation_table
+	add hl,de
+	ld a,(object_ptr)
+	add a,a
+	ld e,a
+	ld d,0
+	add hl,de
+	ld e,(hl)
+	inc hl
+	ld d,(hl)
+	;ex de,hl
+	
+	ld a,e   ; de = new address
+		; hl = table address
+	or d
+	or a  ; if the address = $0, than next level.
+	jr nz,_not_next_lvl
+next_lvl:
+	pop hl ;address
+	xor a
+	ld (object_ptr),a
+	ld (obj_tbl_ptr),a
+	ld a,(CurLevel)
+	ld hl,Levels_Won_table
+	ld e,a
+	ld d,0
+	add hl,de
+	ld (hl),1
+	inc a
+	ld (CurLevel),a
+	jp main
+	
+_not_next_lvl:
+	ex de,hl
+	ld a,(hl)	
+	ld (Objects_on_Screen),a
+	ld (obj_tbl_ptr),a
+	ld b,a
+	inc hl
+	ld de,Object_Table ; new task means a new slate
+	
+	ld a,(hl)
+	push hl
+	;push bc
+	;ld hl,Sprite_Table
+	;ld c,a
+	;ld b,0
+	;add hl,bc
+	;pop bc
+	;push hl
+	;pop ix
+	pop hl
+_getobjects:
+	ld a,(hl)
+	ld (de),a
+	push de
+	ld ix,Sprite_Table
+	ld e,a
+	ld d,0
+	add ix,de
+	ld c,(ix)
+	pop de
+	inc hl
+	inc de
+	ld a,(hl)
+	ld (de),a
+	inc hl
+	inc de
+	ld a,(hl)
+	ld (de),a
+	inc de
+	xor a
+	ld (de),a
+	inc hl
+	inc de
+	ld (de),a
+	inc de
+	ld (de),a
+	inc de
+	ld a,c
+	ld (de),a
+	inc de
+	ld a,(hl)
+	ld (de),a
+	inc de
+	inc hl
+	djnz _getobjects
+	
+	ret
+Draw_Objects:
+	ld hl,Object_Table
+	ld b,32
+_dobjs:
+	push bc
+	push hl
+	ld a,(hl)
+	or a
+	jr z,_nextdobjs
+	
+	push hl
+	push af
+	ld hl,ImageTable2
+	add a,a
+	ld e,a
+	ld d,0
+	add hl,de
+	ld e,(hl)
+	inc hl
+	ld d,(hl)
+	pop af
+	pop hl
+	push de
+
+	push hl
+	ld hl,ImageTable
+	add a,a
+	ld e,a
+	ld d,0
+	add hl,de
+	ld e,(hl)
+	inc hl
+	ld d,(hl)
+	pop hl
+	push de
+	
+	inc hl ; what the image is is unimportant
+	ld c,(hl)
+	inc hl
+	ld b,(hl)
+	ld de,4
+	add hl,de
+	ld a,(hl)
+	
+	cp 9
+	Call nc,Putsprite16
+	cp 9
+	jp c,PutSprite8
+
+_nextdobjs:
+	pop hl
+	pop bc
+	ld de,8
+	add hl,de
+	djnz _dobjs
+	ret
+	
+	
+	
+Putsprite16:
+	;ld e,a ; height and width of sprite
+	pop de
+	ld a,c  ;xcor
+	ld l,b ;ycor
+	pop ix
+	pop bc
+	push de
+	push bc
+	ld de,$86EC
+	push de
+	push ix
+	
+	ld de,$9340
+	push de
+	ld b,2	
+_draw16:
+	pop de
+	pop ix
+	push bc
+	ld b,2
+_16draw:
+	push bc
+	push af
+	push hl
+	push de
+	push ix
+	ld b,8
+	;ld de,$9340
+	Call PutSpriteXOR
+	pop ix
+	ld de,8
+	add ix,de
+	pop de
+	pop hl
+	pop af
+	push af
+	push hl
+	push de
+	push ix
+	ld b,8
+	
+	add a,b
+	;ld de,$9340
+	;inc ix
+	Call PutSpriteXOR
+	pop ix
+	ld de,8
+	add ix,de
+	pop de
+	pop hl
+	;inc ix
+	ld a,8
+	add a,l
+	ld l,a
+	pop af
+	pop bc
+	djnz _16draw
+	push af
+	ld a,-16
+	add a,l
+	ld l,a
+	pop af
+	pop bc
+	;pop ix ; next sprite
+	djnz _draw16
+	ret
+	
+	
+	
+	
+PutSprite8:
+	;push af
+	ld a,c
+	ld l,b
+	ld b,8
+	pop ix
+	push af
+	push hl
+	ld de,$9340
+	Call PutSpriteXOR
+	pop hl
+	pop af
+	ld b,8
+	pop ix
+	ld de,$86EC
+	Call PutSpriteXOR
+	;pop af
+	jp _nextdobjs
+	
+Handle_Objects:
+	;ld a,(Handle_C)
+	;or a
+	;jr z,_cont_handle
+	;inc a
+	;and 01
+	;ld (Handle_C),a
+	;ret
+	
+_cont_handle:
+;	inc a
+;	ld (Handle_C),a
+	ld hl,Object_Table
+	ld b,32
+_handle_objs:
+	push bc
+	push hl
+	ld a,(hl)
+	or a
+	jr z,next_handle
+	
+	add a,a
+	push hl
+	ld hl,Handle_Table
+	ld e,a
+	ld d,0
+	add hl,de
+	ld e,(hl)
+	inc hl
+	ld d,(hl)
+	pop hl
+	ld bc,next_handle
+	push bc
+	push de  ; Calls the function, hl = object pointer (hl) = object #, (hl+1) = xcor, (hl+2) = ycor, so forth
+	ret
+next_handle:
+	pop hl
+	pop bc
+	ld de,8
+	add hl,de
+	djnz _handle_objs
+	ret
+	
+	
+Handle7:
+
+	
+	inc hl
+	ld c,(hl) ;xcor
+
+
+	ld a,(xcor)
+	cp c ;compare the objects xcor
+	jr z,Handle7_inc_ycor
+	jr c,Handle7_left
+	jr Handle7_right
+Handle7_left:
+	dec c 
+	ld (hl),c
+	jr Handle7_inc_ycor
+Handle7_right:
+	inc c
+	ld (hl),c
+	jr Handle7_inc_ycor
+Handle7_inc_ycor:
+	inc hl
+	ld a,(hl)
+	inc a
+	ld (hl),a
+	cp 64
+	ret nz
+	dec hl
+	dec hl
+	ld (hl),0
+	ld a,(objects_on_Screen)
+	dec a
+	ld (objects_on_Screen),a	
+	ret 
+	
+	
+_reset_objfx:
+	pop de
+	pop de
+	dec hl
+	dec hl
+	ld (hl),0
+	ld a,(objects_on_Screen)
+	dec a
+	ld (objects_on_Screen),a
+	ret
+	ret
+
+
+
+	cp 80     ;     64< x<80,  delete it x>80
+	ret nc
+	pop de
+	pop de
+_reset_obj:
+	dec hl
+_resobj2:
+	dec hl
+	ld (hl),0
+	ld a,(objects_on_Screen)
+	dec a
+	ld (objects_on_Screen),a
+	ret
+SpaceShip_Setup:
+;a = restart value
+;d = max value
+	push af
+	inc hl
+	ld c,(hl) ;xcor
+	inc hl
+	ld b,(hl) ;ycor
+	inc hl
+	ld a,(hl)
+	inc a
+	cp d
+	
+	jr nz,_handle_f
+	pop af
+	ld (hl),a
+	ld e,a
+	jr _handle_Skip
+_handle_f:
+	ld (hl),a
+	ld e,a
+	pop af
+_handle_Skip:	;ld d,0
+	ret
+
+
+Handle1:
+	ld a,(hl)
+	push af    ; movement table
+	add a,a
+	ld e,a
+	ld d,0
+	inc hl
+	;ld a,(hl)
+	;or a
+	;jp z,_resobj2
+	;cp 96-8
+	;jp z,_resobj2
+	inc hl
+	ld a,(hl)
+	cp 64
+	Call z,_reset_objfx
+	dec hl
+	dec hl
+	push hl
+	ld hl,Path_Values
+	add hl,de
+	ld a,(hl)
+	inc hl
+	ld d,(hl)
+	pop hl
+	
+	
+	;ld a,40
+	;ld d,80
+	Call SpaceShip_Setup
+	inc hl
+	ld a,(hl)
+	and 07
+	ld (hl),a
+	or a
+	jr nz,Shoot_BulletF
+	Call ionrand
+	and 63
+	or a ;or a
+	jr nz,Shoot_BulletF
+	ld a,(hl)
+	inc a ;1
+	ld (hl),a
+	
+	push hl
+	Call CreateEnemyBullet
+	pop hl
+	jr Bullet_F_F
+Shoot_BulletF:
+	ld a,(hl)
+	or a
+	jr z,Bullet_F_F
+	inc a
+	ld (hl),a
+	
+Bullet_F_F:
+	;c = xcor
+	;b = ycor
+	; hl = copy location
+	; e = offset
+	pop af
+	Call Handle_Pattern
+	ret
+;	ld a,e
+;	cp 40
+;	jr c,_handle_down
+;	cp 60
+;	jr c,_handle_left
+;	cp 80
+;	jr c,_handle_right	
+	
+	
+	
+;Handle6:
+;	ld a,1
+;	ld d,101
+;	Call SpaceShip_Setup
+;	inc hl
+;	ld a,(hl)
+;	inc a
+;	and 31
+;	ld (hl),a
+;	or a
+;	jr nz,Shoot_BulletF6
+;	push hl
+;	Call CreateEnemyBullet
+;	pop hl
+;Shoot_BulletF6:
+;	;starts at 1 :o
+;	ld a,e
+;	cp 21   ;  < 21      20-1 = 19+1 = 20
+;	jp c,_handle_down	
+;	cp 51 ; <61   60-21 = 39+1 = 40
+;	jp c,_handle_right
+;	cp 71  ; <81   80-61 = 19 +1 = 20
+;	jp c,_handle_up
+;	cp 101
+;	jp c,_handle_left
+;
+;	
+	ret
+
+;Handle5:
+;	ld a,1
+;	ld d,101
+;	Call SpaceShip_Setup
+;	inc hl
+;	ld a,(hl)
+;	inc a
+;	and 31
+;	ld (hl),a
+;	or a
+;	jr nz,Shoot_BulletF5
+;	push hl
+;	Call CreateEnemyBullet
+;	pop hl
+;Shoot_BulletF5:
+;	;starts at 1 :o
+;	ld a,e
+;	cp 21   ;  < 21      20-1 = 19+1 = 20
+;	jp c,_handle_down	
+;	cp 51 ; <61   60-21 = 39+1 = 40
+;	jp c,_handle_left
+;	cp 71  ; <81   80-61 = 19 +1 = 20
+;	jp c,_handle_up
+;	cp 101
+;	jp c,_handle_right
+;	ret
+
+Handle8:
+	ld a,40
+	ld d,80
+	Call SpaceShip_Setup
+	inc hl
+	ld a,(hl)
+	and 07
+	ld (hl),a
+	or a
+	jr nz,Shoot_BulletF8
+	Call ionrand
+	and 63
+	or a ;or a
+	jr nz,Shoot_BulletF8
+	ld a,(hl)
+	inc a ;1
+	ld (hl),a
+	
+	push hl
+	Call CreateEnemyBullet
+	pop hl
+	jr Bullet_F_F8
+Shoot_BulletF8:
+	ld a,(hl)
+	or a
+	jr z,Bullet_F_F8
+	inc a
+	ld (hl),a
+	
+Bullet_F_F8:
+	ld a,e
+	cp 40
+	jr c,_handle_down
+	cp 60
+	jr c,_handle_right
+	cp 80
+	jr c,_handle_left
+	;ld a,20
+	;ld d,60
+	;Call SpaceShip_Setup
+	;inc hl
+	;ld a,(hl)
+	;inc a
+	;and 31
+	;ld (hl),a
+	;or a
+	;jr nz,Shoot_BulletF8
+	;push hl
+	;Call CreateEnemyBullet
+	;pop hl
+;Shoot_BulletF8:
+;	ld a,e
+;	cp 20
+;	jr c,_handle_down
+;	cp 40
+;	jr c,_handle_up
+;	cp 60
+;	jr c,_handle_right
+;	cp 80
+;	jr c,_handle_left
+
+
+Handle9:
+	ld a,70
+	ld d,110
+	Call SpaceShip_Setup
+	inc hl
+	ld a,(hl)
+	and 07
+	ld (hl),a
+	or a
+	jr nz,Shoot_BulletF9
+	Call ionrand
+	and 63
+	or a ;or a
+	jr nz,Shoot_BulletF9
+	ld a,(hl)
+	inc a ;1
+	ld (hl),a
+	
+	push hl
+	Call CreateEnemyBullet
+	pop hl
+	jr Bullet_F_F9
+Shoot_BulletF9:
+	ld a,(hl)
+	or a
+	jr z,Bullet_F_F9
+	inc a
+	ld (hl),a
+	
+Bullet_F_F9:
+	ld a,e
+	cp 70
+	jr c,_handle_down	
+	cp 90
+	jr c,_handle_left
+	cp 110
+	jr c,_handle_right
+
+
+
+	
+_Handledirections:
+_handle_down:
+	inc b
+	jr _Handle_cont
+_handle_left:	;
+	dec c
+	jr _Handle_cont
+_handle_right:
+	inc c
+	jr _Handle_cont
+_handle_up:	;
+	dec b
+	jr _Handle_cont
+_Handle_cont:
+	dec hl
+	dec hl
+	ld (hl),b
+	dec hl
+	ld (hl),c
+	ret
+Handle2:
+
+	ret
+Handle3:
+	inc hl
+	inc hl
+	inc hl
+	ld a,(hl)
+	inc a
+	and 31
+	ld (hl),a
+	dec hl
+	dec hl
+	dec hl	
+	push af
+	and 1
+	or a
+	jr z,_Handle3_Draw
+
+	ld (hl),5
+	jr _handle3_chk
+_Handle3_Draw:
+	ld (hl),6
+_handle3_chk:
+	pop af
+	or a
+	ret nz
+	ld (hl),0
+	ld a,(Objects_on_Screen)	
+	dec a	
+	ld (Objects_on_screen),a
+	ret
+Handle4:
+	inc hl
+	inc hl
+	ld a,(hl) ;ycor
+	inc a
+	ld (hl),a
+	cp 64
+	ret nz
+	dec hl
+	dec hl
+	ld (hl),0
+	ld a,(Objects_on_Screen)	
+	dec a	
+	ld (Objects_on_screen),a
+	ret
+Handle14:
+	inc hl
+	inc hl
+	ld a,(hl) ;ycor
+	inc a
+	ld (hl),a
+	cp 64
+	jr z,Handle14_reset
+	ret
+Handle14_reset:
+	ld a,-20
+	ld (hl),a
+	ret
+
+Handle11: ;right
+	inc hl
+	ld a,(hl) ;xcor
+	inc a
+	cp 96-12
+	jr nc,Handle11_delete
+	ld (hl),a	
+	inc hl
+	ld a,(hl) ;ycor
+	inc a
+	inc a
+	ld (hl),a
+	cp 64
+	ret c
+	dec hl
+Handle11_delete:
+	dec hl
+	ld (hl),0
+	ld a,(Objects_on_Screen)	
+	dec a	
+	ld (Objects_on_screen),a
+	ret
+Handle12: ;left
+	inc hl
+	ld a,(hl) ;ycor
+	dec a
+	cp 3
+	jr c,Handle11_delete
+	ld (hl),a	
+	inc hl
+	ld a,(hl) ;ycor
+	inc a
+	inc a
+	ld (hl),a
+	cp 64
+	ret c
+	dec hl
+	dec hl
+	ld (hl),0
+	ld a,(Objects_on_Screen)	
+	dec a	
+	ld (Objects_on_screen),a
+	ret
+Handle13: ;left
+	inc hl	
+	inc hl
+	ld a,(hl) ;ycor
+	inc a
+	inc a
+	ld (hl),a
+	cp 64
+	ret c
+	dec hl
+	dec hl
+	ld (hl),0
+	ld a,(Objects_on_Screen)	
+	dec a	
+	ld (Objects_on_screen),a
+	ret
+Handle10:
+	inc hl
+	inc hl
+	ld a,(hl) ;ycor
+	inc a
+	inc a
+	ld (hl),a
+	cp 64
+	ret nz
+	dec hl
+	dec hl
+	ld (hl),0
+	ld a,(Objects_on_Screen)	
+	dec a	
+	ld (Objects_on_screen),a
+	ret
+
+	
+	
+	
+;-----------------------------------------------
+Subroutines:
+;-----------------------------------------------	
+fastCopyfx:
+	di
+	xor a
+	out ($20),a
+ 	ld a,$80
+ 	out ($10),a
+ 	ld hl,$9340-12-(-(12*64)+1)
+	ld a,$20
+	ld c,a
+	inc hl
+ 	dec hl
+fastCopyAgainx:
+ 	ld b,64
+ 	inc c
+	ld de,-(12*64)+1
+ 	out ($10),a
+	add hl,de
+ 	ld de,10
+fastCopyLoopx:
+ 	add hl,de
+ 	inc hl
+ 	inc hl
+ 	inc de
+	ld a,(hl)
+	out ($11),a
+	dec de
+	djnz fastCopyLoopx
+ 	ld a,c
+	cp $2B+1
+ 	jr nz,fastCopyAgainx
+
+	ld a,01
+	out ($20),a
+	ei
+	ret
+
+
+ionrand:
+    push    hl
+	push    de
+    ld      hl,(randData)
+    ld      a,r
+    ld      d,a
+    ld      e,(hl)    
+    add     hl,de
+    add     a,l
+    xor     h
+    ld      (randData),hl
+    pop     de
+    pop     hl
+    ret	  
+PutSpriteXOR:
+    ; A = x coordinate
+; L = y coordinate
+; B = number of rows
+; IX = address of sprite
+	push af
+	push bc
+	ld a,l
+	or a
+	jp m,handle_negative
+	ld a,63
+	dec b
+	dec b
+	sub b
+	ld b,a
+	ld a,l
+	cp b
+	jr nc,bottom_clip
+	
+	pop bc
+	pop af
+	
+_xor:
+	push de
+    LD     H, 0
+    LD     D, H
+    LD     E, L
+    ADD    HL, HL
+    ADD    HL, DE
+    ADD    HL, HL
+    ADD    HL, HL
+    LD     E, A
+    SRL    E
+    SRL    E
+    SRL    E
+    ADD    HL, DE
+    pop de
+    ADD    HL, DE
+    AND    7
+    JR     Z, Alignedx
+    LD     C, A
+    LD     DE, 12
+RowLoopx:
+    PUSH   BC
+    LD     B, C
+    .db $DD, $4E, $00
+    XOR    A
+ShiftLoopx:
+    SRL    C
+    RRA
+    djnz ShiftLoopx
+    INC    HL
+    XOR    (HL)
+    LD     (HL), A
+    DEC    HL
+    LD     A, C
+    XOR    (HL)
+    LD     (HL), A
+    ADD    HL, DE
+    INC    IX
+    POP    BC
+    djnz RowLoopx
+    jr Endx
+Alignedx:
+    LD     DE, 12
+PutLoopx:
+    .db $DD, $7E, $00
+    XOR    (HL)
+    LD     (HL), A
+    INC    IX
+    ADD    HL, DE
+    DJNZ   PutLoopx
+Endx:	
+	ret
+handle_negative:
+	neg
+	pop bc
+	push bc
+	cp b
+	jr nc,_falsedraw
+	ld c,a
+	ld b,0
+	add ix,bc
+	pop bc
+	ld c,a
+	ld a,b
+	sub c
+	ld b,a
+	pop af
+	ld l,0
+	jr _Xor
+bottom_clip:
+	cp 64
+	jr nc,_falsedraw
+	pop bc
+	push bc
+	ld c,b
+	dec c
+	ld b,a
+	ld a,63
+	sub c
+	sub b
+	pop bc
+	add a,b
+	ld b,a
+	pop af
+	jr _xor
+_falsedraw:
+	pop bc
+	pop af
+	ret
+
+
+;scrolls the parallax background
+_scrollup:
+;PARAMETERS
+;DE = Address of Buffer
+;HL = Image Address
+	push de
+	push hl
+	ld hl,12
+	add hl,de
+	; our goal is to copy  row 2 to row 1, row 3 to row 2, row 4 to row 3
+	ld b,63 ; 64 rows
+ScrollUp:
+	push bc
+	ldi \ ldi \ ldi
+	ldi \ ldi \ ldi  ; 12 * 64 
+	ldi \ ldi \ ldi
+	ldi \ ldi \ ldi
+	pop bc
+	djnz ScrollUp
+	ld a,(_ptr)
+	inc a
+	and 63   ; reset the pointer if it exceeds the bounds
+	ld (_ptr),a
+	pop hl ;image
+	ld de,12
+	or a
+	jr z,No_Offset
+	ld b,a
+_Loop:
+	add hl,de
+	djnz _Loop
+No_Offset:
+	pop de
+	push hl
+	ld hl,12*63
+	add hl,de
+	ex de,hl
+	pop hl
+	ld bc,12
+	ldir
+	ret
+_end:
+
+Menux:
+.db ">2nd<",0
+;==========================================================
+; grayscale include file
+;==========================================================
+; comment these defines in or out to activate/deactivate them
+
+;#DEFINE NODOUBLEBUFFER	;when on,routines write directly to screen (faster and smaller)
+;#DEFINE 3LEVELGRAY	;makes it 3-level grayscale (a bit faster)
+
+#DEFINE XORSPRITE	;includes gsPutSprite
+
+#DEFINE LARGESPRITE	;includes gsLargeSprite
+#DEFINE ALIGNEDSPRITE	;includes gsAlignedsprite
+#DEFINE ALIGNEDMASKEDSPRITE
+#include greylib2.inc
+;-----------------------------------------------
+VARIABLES:
+;-----------------------------------------------
+CharTable:
+.DB  $27, "WRMH", $FF, $FF        ; + - × ÷ ^ undefined
+.DB  "?", $5B, "VQLG", $FF, $FF    ; (-) 3 6 9 ) TAN VARS undefined
+.DB  ":ZUPKFC", $FF             ; . 2 5 8 ( COS PRGM STAT
+.DB  " YTOJEB", $FF, $FF         ; 0 1 4 7 , SIN APPS XT?n undefined
+.DB  "XSNIDA"         
+
+Blankx:
+.db " "
+bufferfx:
+.db "          ",0	
+Winner:
+   .db "Congratz!",0
+Winner2:
+   .db "New Hi-Score!!!!",0   
+Winner3:
+	.db "Please type in your name:",0
+playerCol_C:
+.db 0
+bulletCol_C:
+.db 0
+xtab:
+.db 28
+.db 19
+.db 30
+ytab:
+.db 24
+.db 37
+.db 51
+option_num:
+.db 0
+
+shoot_timer:
+.db 0
+Ally_Timer:
+.db 0
+allyx:
+.db 0
+allyy:
+.db 0
+Ammo:
+.db 0
+PowerUp:
+.db 0
+randData:
+.db 5,0,0,0
+menu_c:
+.db 0
+invul_c:
+.db 0
+obj_tbl_ptr:
+.db 0
+Lives:
+.db 5
+copyc:
+.db 0
+Score:
+.db 0,0,0,0,0
+Add:
+.db 0,0,0,0,0
+Level:
+.db 0,0,0,0,0
+Hiscore1:
+.db 0,0,0,0,0
+Hiscore2:
+.db 0,0,0,0,0
+Hiscore3:
+.db 0,0,0,0,0
+Hiscore4:
+.db 0,0,0,0,0
+UserA:
+.db "1.CPU1",0,"111111" ; 3 letters, end
+UserB:
+.db "2.CPU2",0,"222222" ; 3 letters, end
+UserC:
+.db "3.CPU1337 =P",0 ; 3 letters, end
+UserD:
+.db "3.CPU1337 =P",0 ; 3 letters, end
+_ptr:
+.db 63
+xcor:
+.db 40
+ycor:
+.db 64-8
+Background_C:
+.db 0
+Bullet_C:
+.db 0
+Bullet_D_C: ; shoot a bullet, this waits 4 pixels for the bullet to move up to draw the next bullet
+.db 0
+object_ptr:
+.db 0
+Objects_on_screen:
+.db 0
+next_obj:
+.db 0
+
+curlevel:
+.db 0
+
+level_m2:
+.db 0 ;first row  0-1 (2)
+level_m:
+.db 0 ;first object in the list, 0-4 (5)
+
+Continue:
+.db "It appears a game is in",0
+Continue2:
+.db " progress, press ENTER.",0
+
+Handle_C:
+.db 0
+
+;	ld a,e
+;	cp 40
+;	jr c,_handle_down
+;	cp 60
+;	jr c,_handle_left
+;	cp 80
+;	jr c,_handle_right	
+
+	;cp 70
+	;jr c,_handle_down	
+	;cp 90
+	;jr c,_handle_left
+	;cp 110
+	;jr c,_handle_right
+.db 1,1,1,1,1,1,1,1,1,1
+Downwardplus30:
+.db 1,1,1,1,1,1
+.db 1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1  ;30
+.db 1,1,1,1,1,1,1,1	
+Downward:
+.db 1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1
+.db 1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1  ;40
+.db 1,1,1,1,1,1,1,1
+
+.db 0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0
+.db 0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0
+.db 0,0,0,0,0,0,0,0    ;40
+
+.db 0,0,0,0,0,0,0,0,0,0 ;10
+StrafeMovementplus30:
+.db 0,0,0,0,0,0
+.db 0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0 ;30
+.db 0,0,0,0,0,0,0,0
+Strafe_movement:
+.db 0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0
+.db 0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0
+.db 0,0,0,0,0,0,0,0
+.db -1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1
+.db -1,-1,-1,-1 ;20
+.db 1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1
+.db 1,1,1,1 ;20
+DownwardR:
+.db 1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1
+.db 1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1
+.db 1,1,1,1,1,1,1,1
+Strafe_movementR:
+.db 0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0
+.db 0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0
+.db 0,0,0,0,0,0,0,0
+.db 1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1
+.db 1,1,1,1 ;20
+.db -1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1
+.db -1,-1,-1,-1 ;20
+
+Zigzagy:
+.db 0
+.db 1,1,1,1,1,1,1,1,1,1
+.db 1,1,1,1,1,1,1,1,1,1
+.db 0,0,0,0,0,0,0,0,0,0
+.db 0,0,0,0,0,0,0,0,0,0
+.db -1,-1,-1,-1,-1,-1,-1,-1,-1,-1
+.db -1,-1,-1,-1,-1,-1,-1,-1,-1,-1
+Zigzagx:
+.db 0,0,0,0,0,0,0,0,0,0  ;43
+.db 0,0,0,0,0,0,0,0,0,0 
+
+.db 0
+.db 1,1,1,1,1,1,1,1,1,1
+.db 1,1,1,1,1,1,1,1,1,1
+.db 0,0,0,0,0,0,0,0,0,0
+.db 0,0,0,0,0,0,0,0,0,0
+.db -1,-1,-1,-1,-1,-1,-1,-1,-1,-1
+.db -1,-1,-1,-1,-1,-1,-1,-1,-1,-1
+
+Cubic_movex:
+.db 0,0,0,0,0,0,0,0,0,0,0
+.db 0,0,0,0,0,0,0,0,0,0,0
+.db -1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1
+.db -1,-1,-1,-1,-1,-1,-1,-1,-1,-1
+.db -1,-1,-1,-1,-1,-1,-1,-1,-1,-1
+.db -1,-1,-1,-1,-1,-1,-1,-1,-1,-1
+.db -1,-1,-1,-1,-1,-1,-1,-1,-1,-1
+.db -1
+cubic_movey:
+.db 0,1,1,1,1,1,1,1,1,1,1
+.db 0,1,1,1,1,1,1,1,1,1,1
+.db 0,3,2,2,1,2,1,2,1,2,1,1,0,1,1,0,1,0,0
+.db 0,0,1,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,1,1
+.db 2,1,1,2,1,2,1,2,1,3,2,2,2,3
+
+
+
+;-----------------------------------------------
+Tables
+;-----------------------------------------------
+Move_Table:
+.dw 0
+.dw 0
+.dw Strafe_Movement
+.dw Downward
+.dw Strafe_Movement
+.dw Downward
+.dw Strafe_Movement
+.dw Downward
+.dw Strafe_Movement
+.dw Downward
+.dw Strafe_Movement
+.dw Downward
+.dw Strafe_Movement
+.dw Downward
+.dw Strafe_Movement
+.dw Downward
+.dw Strafe_Movement
+.dw Downward
+.dw Strafe_Movement
+.dw Downward
+.dw Strafe_Movement ;10
+.dw Downward
+.dw Strafe_Movement
+.dw Downward
+.dw Strafe_Movement
+.dw Downward
+.dw Strafe_Movement
+.dw Downward
+.dw Strafe_Movement
+.dw Downward
+.dw Strafe_Movement
+.dw Downward
+.dw Strafe_MovementR
+.dw DownwardR
+.dw Strafe_Movement
+.dw Downward
+.dw Strafemovementplus30
+.dw Downwardplus30
+.dw 0,0
+.dw 0,0
+.dw 0,0
+.dw 0,0
+.dw 0,0
+.dw Cubic_movex+9
+.dw cubic_movey+9
+.dw Cubic_movex+18
+.dw cubic_movey+18
+.dw Cubic_movex+0
+.dw cubic_movey+0
+Path_Values:
+.db 0,0
+.db 40,80
+.db 40,80
+.db 40,80
+.db 40,80
+.db 40,80
+.db 40,80
+.db 40,80
+.db 40,80
+.db 40,80
+.db 40,80
+.db 40,80
+.db 40,80
+.db 40,80
+.db 40,80
+.db 40,80
+.db 40,80
+.db 40,80
+.db 70,110
+.db 0,0
+.db 0,0
+.db 0,0
+.db 0,0
+.db 0,0
+.db 9,63
+.db 0,53
+.db 18,73
+Levels_Won_Table:
+.db 0 ;level 0
+.db 0 ;level 1
+.db 0 ;level 2
+.db 0
+.db 0
+.db 0
+.db 0
+.db 0
+.db 0
+.db 0
+.db 0
+
+Session:
+.db 0
+
+Sprite_Table:
+.db 8
+.db 8
+.db 8
+.db 8
+.db 8
+.db 8
+.db 8
+.db 8
+.db 8
+.db 8
+.db 8
+.db 8
+.db 8
+.db 8
+.db 8
+.db 8
+.db 8
+.db 16 ;17
+.db 8
+.db 8 ;19
+.db 16
+.db 8
+.db 8
+.db 8
+.db 8
+.db 8
+.db 8
+Score_Table:
+.db 0,0,0,0,0
+.db 0,0,0,5,0 ;1
+.db 0,0,0,7,0 ;2
+.db 0,0,1,0,0
+.db 0,0,1,0,0
+.db 0,0,0,0,0
+.db 0,0,0,0,0
+.db 0,0,0,0,0
+.db 0,0,0,5,0
+.db 0,0,0,5,0 ;9
+.db 0,0,0,3,0 ;10
+.db 0,0,0,0,0
+.db 0,0,0,0,0
+.db 0,0,0,3,0 ;13
+.db 0,0,0,0,0
+.db 0,0,0,2,0
+.db 0,0,0,5,0 ;16
+.db 0,0,1,0,0
+.db 0,0,0,5,0
+.db 0,0,0,0,0
+.db 0,0,0,1,0
+.db 0,0,0,0,0
+.db 0,0,0,0,0
+.db 0,0,0,0,0
+.db 0,0,0,5,0 ;24
+.db 0,0,0,5,0 ;25
+.db 0,0,0,5,0
+Bullet_Pic_Table:
+.dw 0
+.dw bullet
+.dw epic_bullet
+.dw allybullet
+.dw bullet
+.dw bullet
+.dw bullet
+Bullet_Pic_Table2:
+.dw 0
+.dw bullet2
+.dw epic_bullet
+.dw allybullet
+.dw bullet2
+.dw bullet2
+.dw bullet2
+Bullet_move_Table:
+.dw 0
+.dw TaskBullet1
+.dw TaskBullet1
+.dw TaskBullet1
+.dw TaskBullet2
+.dw TaskBullet3
+.dw TaskBullet4
+
+
+
+Bullet_Table:
+; bullet_pic, xcor, ycor, direction
+.db 0,0,0,0  ; approximately 22-23 bullets max on the screen
+.db 0,0,0,0
+.db 0,0,0,0
+.db 0,0,0,0
+.db 0,0,0,0
+.db 0,0,0,0
+.db 0,0,0,0
+.db 0,0,0,0
+.db 0,0,0,0
+.db 0,0,0,0
+.db 0,0,0,0  ; approximately 32 bullets max on the screen
+.db 0,0,0,0
+.db 0,0,0,0
+.db 0,0,0,0
+.db 0,0,0,0
+.db 0,0,0,0
+.db 0,0,0,0
+.db 0,0,0,0
+.db 0,0,0,0
+.db 0,0,0,0
+.db 0,0,0,0
+.db 0,0,0,0
+.db 0,0,0,0
+.db 0,0,0,0
+.db 0,0,0,0
+.db 0,0,0,0
+.db 0,0,0,0
+.db 0,0,0,0
+.db 0,0,0,0
+.db 0,0,0,0
+.db 0,0,0,0
+.db 0,0,0,0
+Level_creation_table:
+.dw Level0-Object_creation_table
+.dw Level1-Object_creation_table
+.dw Level2-Object_creation_table
+
+Object_creation_table:
+; .what's chillin?
+Level0:
+.dw 0
+.dw Task0
+.dw TaskPower
+.dw TaskPower
+;.dw Task0
+.dw Task3
+.dw Task5
+.dw Task1
+.dw Task2
+.dw Task3
+.dw Task4
+.dw Task5
+Level1:
+.dw 0
+.dw Task1
+.dw Task6
+.dw Task7
+Level2:
+.dw 0
+.dw Task1
+.dw Task5
+.dw Task6
+.dw Task6
+.dw Task6
+.dw Task6
+
+
+TaskPower:
+.db 11
+.db 24,75,-13,2
+.db 25,75,-2,2
+.db 26,75,-23,2
+.db 16,10,-31,3
+.db 16,20,-31,3
+.db 16,30,-31,3
+.db 16,10,-21,3
+.db 16,20,-21,3
+.db 16,30,-21,3
+.db 20,70,-60,3
+.db 10,65,-60,3
+
+Task0:
+.db 5
+;.db 19,45,0,2
+.db 20,10,-50,2
+.db 20,30,-50,2
+.db 20,50,-50,2
+.db 20,70,-50,2
+.db 19,44,0,1
+;.db 20,20,-10,1
+;.db 17,40,0,1
+
+Task1:
+.db 11
+;.db 16,8,-10,1 ;9
+.db 1,45,-39,2 
+.db 1,55,-39,2 
+.db 1,65,-39,2 
+.db 1,45,-29,2
+.db 1,55,-29,2   ; 9 = down,right,up,left
+.db 1,65,-29,2   ;8   ; 8 =down,left,up,right
+
+.db 18,45,-49,2
+.db 18,55,-49,2
+.db 18,65,-49,2
+.db 20,10,-80,5
+.db 20,70,-80,5
+Task2:
+.db 5
+.db 14,25,-5,5
+.db 14,45,-5,5 
+.db 14,65,-5,5 
+.db 10,8,-10,1
+.db 10,96-8-8-4,-10,1 
+Task3:
+.db 8
+.db 16,11,-39,2 
+.db 16,22,-39,2 
+.db 16,33,-39,2 
+.db 16,11,-29,2
+.db 16,22,-29,2   ; 9 = down,right,up,left
+.db 16,33,-29,2   ;8   ; 8 =down,left,up,right
+.db 14,11,-70,5
+.db 14,96-8-8,-70,5
+Task4:
+.db 8
+.db 10,0,0,1 
+.db 10,96-8,0,1 
+.db 1,45,-39,1 
+.db 1,55,-39,1 
+.db 1,65,-39,1 
+.db 1,45,-29,1 
+.db 1,55,-29,1 
+.db 1,65,-29,1 
+Task5:
+.db 12
+.db 16,96-8-8-20,-39,3
+.db 16,96-8-8-10-20,-39,3
+.db 1,8+20,-39,3
+.db 1,18+20,-39,3
+
+.db 16,96-8-8-20,-29,3
+.db 16,96-8-8-10-20,-29,3
+.db 1,8+20,-29,3
+.db 1,18+20,-29,3
+
+.db 14,39,-5,1
+.db 14,49,-5,1
+.db 14,39,-15,1
+.db 14,49,-15,1
+
+Task6:
+.db 9
+;.db 16,8,-10,1 ;9
+.db 1,45,-35,4 
+.db 1,55,-35,4 
+.db 1,65,-35,4 
+.db 1,45,-25,4
+.db 1,55,-25,4   ; 9 = down,right,up,left
+.db 1,65,-25,4   ;8   ; 8 =down,left,up,right
+
+.db 18,45,-45,8
+.db 18,55,-45,8
+.db 18,65,-45,8
+
+
+;Task2:          
+.db 6
+.db 1,60,-10,1 
+.db 1,70,-10,1 
+.db 1,80,-10,1 
+.db 18,60,-20,1 
+.db 18,70,-20,1 
+.db 18,80,-20,1 
+;Task3:
+.db 2
+.db 1,45,0,2 
+.db 10,65,0,1 
+;Task4:
+.db 6
+.db 1,45,-15,2 
+.db 1,55,-15,2 
+.db 1,65,-15,2 
+.db 13,45,-5,5
+.db 13,55,-5,5 
+.db 13,65,-5,5 
+
+;Task5:
+.db 8
+.db 10,0,0,1 
+.db 10,96-8,0,1 
+.db 1,45,-15,1 
+.db 1,55,-15,1 
+.db 1,65,-15,1 
+.db 1,45,-5,1 
+.db 1,55,-5,1 
+.db 1,65,-5,1 
+;Task6:
+.db 6
+.db 14,45,-5,5
+.db 14,55,-5,5 
+.db 14,65,-5,5 
+
+.db 14,15,-50,5
+.db 14,25,-50,5 
+.db 14,35,-50,5 
+
+Task7:
+.db 2
+.db 3,40,5,10
+.db 4,48,5,10
+  
+ImageTable:
+.dw 0
+.dw Enemy
+.dw Joe
+.dw H
+.dw I
+.dw Explosion
+.dw Explosion2
+.dw AmmoP
+.dw Cruiser
+.dw Cruiser ;9
+.dw kami
+.dw Life_1up2
+.dw AllyPower ;12
+.dw Shielder ;13
+.dw Asteroid ;14
+.dw Tanker
+.dw Enemy
+.dw Boss1
+.dw shielder
+.dw tripleshot ;19
+.dw Bast1 ;20
+.dw Asteroid
+.dw Asteroid
+.dw Asteroid
+.dw Enemy
+.dw Enemy
+.dw Enemy
+ImageTable2:
+.dw 0
+.dw Enemy2
+.dw Joe
+.dw H
+.dw I
+.dw Explosion ;5
+.dw Explosion2 ;6
+.dw AmmoP2
+.dw Cruiser2
+.dw Cruiser2
+.dw kami2
+.dw Life_1up2
+.dw AllyPower2 ;12 
+.dw Shielder2 ;13
+.dw Asteroid2 ;14
+.dw Tanker2
+.dw Enemy2
+.dw Bossg1  ;17
+.dw shielder2
+.dw tripleshot2;19
+.dw Bast1g ;20
+.dw Asteroid2
+.dw Asteroid2
+.dw Asteroid2
+.dw Enemy2
+.dw Enemy2
+.dw Enemy2
+Handle_Table:
+.dw 0 ;0
+.dw Handle1 ;1
+.dw Handle2 ;2
+.dw Handle2 ;3
+.dw Handle2 ;4
+.dw Handle3
+.dw Handle3
+.dw Handle4 ;7  ammo powerup
+.dw 0 ;Handle5
+.dw 0 ;Handle6
+.dw Handle7 ;10
+.dw Handle4 ;11 life bonus
+.dw Handle4
+.dw Handle1
+.dw Handle4 ;14
+.dw handle1
+.dw handle1 ;16
+.dw Handle1
+.dw Handle1
+.dw Handle4 ;19
+.dw Handle14 ;20
+.dw Handle11
+.dw Handle12
+.dw Handle13
+.dw Handle1 ;1
+.dw Handle1 ;1
+.dw Handle1 ;1
+Number_Table:	
+.dw zeronum
+.dw onenum	
+.dw twonum
+.dw threenum		
+.dw fournum	
+.dw fivenum	
+.dw Sixnum	
+.dw sevennum	
+.dw eightnum
+.dw ninenum
+.dw blank
+
+Collision_Table: ; bullet to enemy
+.dw 0 ;0
+.dw Collision1 ;1 ->gives the ammo power up
+.dw Collision1 ;2
+.dw Collision1 ;3
+.dw Collision1 ;4
+.dw Collision3 ;5
+.dw Collision3 ;6
+.dw Collision3 ;7    ; ammo power up
+.dw Collision5 ;8 ->gives the life 1up
+.dw Collision5 ;9 
+.dw Collision1 ;10 
+.dw Collision3 ;11 life power up
+.dw Collision3
+.dw Collision5
+.dw Collision3
+.dw collision6
+.dw Collision1
+.dw Collision1 ;17
+.dw Collision1
+.dw Collision3 ;19
+.dw Collision7
+.dw Collision1
+.dw Collision1
+.dw Collision1
+.dw Collision1
+.dw Collision1
+.dw Collision1  ;26
+CE_collision_table: ;enemy to character
+.dw 0
+.dw CECollision1 ;1
+.dw CECollision1 ;2
+.dw CECollision1 ;3
+.dw CECollision1 ;4
+.dw CECollision1 ;5
+.dw CECollision1 ;6
+.dw CECollision2 ;7 ammo power up
+.dw CEcollision1
+.dw CEcollision1 ;9
+.dw CEcollision1
+.dw CECollision3 ; 11 life power up
+.dw CECollision4 ;makes an ally
+.dw CEcollision1
+.dw CEcollision1
+.dw CEcollision1
+.dw CEcollision1
+.dw CEcollision1
+.dw CEcollision1
+.dw CEcollision5 ;19
+.dw CEcollision1 ;20
+.dw CEcollision1
+.dw CEcollision1
+.dw CEcollision1
+.dw CEcollision1
+.dw CEcollision1
+.dw CEcollision1
+;-----------------------------------------------
+IMAGES:
+;-----------------------------------------------	
+allyShip:
+.db $18,$24,$24,$7E,$BD,$BD,$42,$00
+allyShip2:
+.db $18,$3C,$3C,$42,$C3,$FF,$42,$00
+tanker:
+.db $81,$FF,$FF,$FF,$FF,$FF,$7E,$3C
+
+tanker2:
+.db $81,$FF,$E7,$DB,$DB,$DB,$66,$3C
+
+
+Asteroid:
+.db $38,$7F,$E7,$C7,$C7,$FF,$FE,$0E
+
+Asteroid2:
+.db $38,$6F,$D9,$BB,$BB,$83,$FA,$0E
+
+
+Tab:
+.db %11111100
+.db %11111100
+
+
+
+AllyPower:
+.db $7E,$81,$A5,$A5,$81,$A5,$99,$7E
+
+AllyPower2:
+.db $7E,$FF,$FF,$FF,$FF,$FF,$FF,$7E
+
+blank:
+.db 0,0,0,0,0
+Life_1up:
+.db $66,$99,$A5,$BD,$BD,$5A,$24,$18
+
+Life_1up2:
+.db $66,$FF,$DB,$C3,$C3,$66,$3C,$18
+
+AllyBullet:
+.db $60,$60,$60,$60
+
+
+
+Spaceship:
+.db $18,$3C,$66,$66,$66,$C3,$FF,$C3
+
+AmmoP:
+.db $7E,$FF,$FF,$E7,$E7,$FF,$FF,$7E
+
+AmmoP2:
+.db $7E,$81,$99,$BD,$BD,$BD,$81,$7E
+
+Kami:
+.db $E7,$E5,$BF,$D5,$AB,$56,$2C,$18
+
+Kami2:
+.db $00,$42,$42,$7E,$7E,$3C,$18,$00
+
+
+
+Spaceship2:
+.db $18,$24,$7E,$5A,$5A,$BD,$BD,$C3
+Spaceship_mask:
+.db %11100111
+.db %11000011
+.db %10000001
+.db %10000001
+.db %10000001
+.db %00000000
+.db %00000000
+.db %00111100
+Joe:
+.db %11111111
+.db %10000001
+.db %10000001
+.db %10000001
+.db %10000001
+.db %10000001
+.db %10000001
+.db %11111111
+
+Epic_Bullet:
+.db %11110000
+.db %10010000
+.db %10010000
+.db %01100000
+
+H:
+.db $42,$42,$42,$7E,$42,$42,$42,$42
+I:
+
+.db $FF,$10,$10,$10,$10,$10,$10,$FF
+
+zeronum:
+.db %01000000
+.db %10100000
+.db %10100000
+.db %10100000
+.db %01000000
+
+
+Onenum:
+.db %01000000
+.db %11000000
+.db %01000000
+.db %01000000
+.db %01000000
+Twonum:
+.db %11000000
+.db %00100000
+.db %01000000
+.db %10000000
+.db %11100000
+
+Threenum:
+.db %11000000
+.db %00100000
+.db %01000000
+.db %00100000
+.db %11000000
+
+Fournum:
+.db %10100000
+.db %10100000
+.db %11100000
+.db %00100000
+.db %00100000
+
+Fivenum:
+.db %11100000
+.db %10000000
+.db %11000000
+.db %00100000
+.db %11000000
+	
+Sixnum:
+.db %01100000
+.db %10000000
+.db %11000000
+.db %10100000
+.db %01100000
+
+Sevennum:
+.db %11100000
+.db %00100000
+.db %01000000
+.db %01000000
+.db %10000000
+
+EightNum:
+.db %01000000
+.db %10100000
+.db %01000000
+.db %10100000
+.db %01000000
+
+Ninenum:
+.db %01100000
+.db %10100000
+.db %01100000
+.db %00100000
+.db %00100000
+
+
+
+Shielder:
+.db $81,$DB,$FF,$BD,$81,$BD,$FF,$7E
+Shielder2:
+.db $81,$C3,$C3,$FF,$FF,$FF,$C3,$7E
+
+tripleshot:
+.db $81,$C3,$A5,$A5,$BD,$7E,$3C,$18
+
+tripleshot2:
+.db $81,$C3,$E7,$E7,$DB,$5A,$24,$18
+
+
+
+Bullet:
+.db $60,$D0,$F0,$60
+
+Bullet2:
+.db $60,$B0,$90,$60
+Enemy:
+.db $18,$99,$E7,$FF,$FF,$66,$3C,$18
+
+Enemy2:
+.db $00,$81,$DB,$BD,$81,$5A,$24,$18
+Life:
+.db $20,$50,$88,$F8,$D8
+Life2:
+Image1_Layer2:
+.db $20,$70,$F8,$A8,$D8
+
+explosion:
+.db $91,$52,$00,$03,$C0,$00,$4A,$89
+explosion2:
+
+.db $08,$08,$00,$C0,$03,$00,$10,$10
+
+
+Cruiser:
+.db $3C,$5A,$99,$EF,$F7,$99,$5A,$3C
+
+Cruiser2:
+.db $3C,$66,$FF,$B5,$AD,$FF,$66,$3C
+
+Bast1
+.db $03,$76,$5F,$FF,$B8,$FB,$7F,$FF
+bast2
+.db $C0,$60,$F8,$78,$78,$7C,$FF,$FD
+bast3
+.db $9F,$F7,$E7,$EF,$4F,$7F,$7F,$40
+bast4
+.db $9D,$DF,$CE,$9E,$FC,$FC,$EC,$F8
+
+
+
+
+
+Bast1g
+.db $03,$77,$78,$C0,$C7,$C4,$40,$C0
+bast2g
+.db $C0,$E0,$18,$88,$88,$8C,$07,$03
+bast3g
+.db $E0,$88,$98,$D0,$70,$40,$7F,$40
+bast4g
+.db $63,$23,$32,$66,$04,$04,$9C,$F8
+
+
+
+Boss1:
+.db $F1,$F2,$F4,$DF,$DF,$C0,$60,$60
+Boss2:
+.db $8F,$4F,$2F,$FB,$FB,$03,$06,$06
+Boss3:
+.db $37,$37,$37,$5B,$58,$5C,$57,$73
+Boss4:
+.db $EC,$EC,$EC,$DA,$1A,$3A,$EA,$CE
+
+Bossg1:
+.db $F0,$91,$93,$AF,$A0,$BF,$5F,$5F
+Bossg2:
+.db $0F,$89,$C9,$F5,$05,$FD,$FA,$FA
+Bossg3:
+.db $2F,$2C,$2C,$77,$77,$7B,$74,$73
+Bossg4:
+.db $F4,$34,$34,$EE,$EE,$DE,$2E,$CE
+
+blankg:
+.db 0,0,0,0,0,0,0,0
+.db 0,0,0,0,0,0,0,0
+.db 0,0,0,0,0,0,0,0
+.db 0,0,0,0,0,0,0,0
+
+Layer1:
+.db $3F,$FF,$FF,$FF,$FF,$FF,$FF,$FF,$FF,$FF,$FF,$FC,$0F,$FF,$FF,$FF
+.db $FF,$FF,$FF,$FF,$FF,$FF,$FF,$F0,$03,$FF,$FF,$FF,$FF,$FF,$FF,$FF
+.db $FF,$FF,$FF,$C0,$01,$FF,$FF,$FF,$FF,$FF,$FF,$FF,$F8,$7F,$FF,$80
+.db $03,$FF,$FF,$FF,$FF,$FF,$FF,$FF,$F0,$7F,$FF,$C0,$0F,$FF,$FF,$FF
+.db $FF,$FF,$FF,$FF,$F3,$FF,$FF,$F0,$3F,$FF,$FF,$FF,$FF,$FF,$FF,$FF
+.db $FB,$FF,$FF,$FC,$3F,$FF,$FF,$FF,$FF,$FF,$FF,$FF,$F9,$FF,$FF,$FC
+.db $3F,$FF,$FF,$FF,$FF,$FF,$FF,$FF,$F8,$7F,$F3,$FC,$3F,$FF,$FF,$FF
+.db $FF,$FF,$FF,$FF,$FE,$3F,$F1,$FC,$0F,$FF,$FF,$FF,$FF,$FF,$FF,$FF
+.db $FF,$0F,$F9,$F0,$03,$FF,$FF,$FF,$FF,$FF,$FF,$FF,$7F,$80,$FD,$C0
+.db $01,$FF,$FF,$FF,$FF,$FF,$FF,$FE,$3F,$E0,$01,$80,$03,$FF,$FF,$FF
+.db $FF,$FF,$FF,$FF,$7F,$FE,$03,$C0,$0F,$FF,$FF,$FF,$FF,$FF,$FF,$FF
+.db $FF,$FF,$FF,$F0,$3F,$FF,$FF,$FF,$FF,$FF,$FF,$FF,$FF,$FF,$FF,$FC
+.db $3F,$FF,$FF,$FF,$FF,$FF,$FF,$FF,$FF,$FF,$FF,$FC,$3F,$FF,$FF,$FF
+.db $FF,$FF,$FF,$FF,$FF,$FF,$FF,$FC,$3F,$FF,$FF,$BF,$FF,$FF,$FF,$FF
+.db $FF,$FF,$FF,$FC,$0F,$FF,$FF,$1F,$FF,$FF,$FF,$FF,$FF,$FF,$FF,$F0
+.db $03,$FF,$FF,$BF,$FF,$FF,$FF,$FF,$FF,$FF,$FF,$C0,$01,$FF,$FF,$FF
+.db $FB,$FF,$FF,$FF,$FF,$FF,$FF,$80,$03,$FF,$FF,$FF,$F1,$FF,$FF,$FF
+.db $FF,$FF,$FF,$C0,$0F,$FF,$FF,$FF,$FB,$FF,$FF,$FF,$FF,$FF,$FF,$F0
+.db $3F,$FF,$FF,$FF,$FF,$FF,$FD,$FF,$FF,$FF,$FF,$FC,$3F,$FF,$FF,$FF
+.db $FF,$FF,$F8,$FF,$FF,$FF,$FF,$FC,$3F,$FF,$FF,$FF,$FF,$FF,$FD,$FF
+.db $FF,$FF,$FF,$FC,$3F,$FF,$FF,$FF,$FF,$FF,$FF,$FF,$FF,$FF,$FF,$FC
+.db $0F,$FF,$FF,$FF,$FF,$FF,$FF,$FF,$FF,$FF,$FF,$F0,$03,$FF,$FF,$FF
+.db $FF,$FF,$FF,$FF,$FF,$FF,$7F,$C0,$01,$FF,$FF,$FF,$FF,$FF,$FF,$FF
+.db $AF,$FE,$3F,$80,$03,$FF,$FF,$FF,$FF,$FF,$D7,$FF,$DF,$FF,$7F,$C0
+.db $0F,$FF,$FF,$FF,$FF,$FF,$EF,$FF,$AF,$FF,$FF,$F0,$3F,$FF,$FF,$FF
+.db $FF,$FF,$D7,$FF,$FF,$FF,$FF,$FC,$3F,$FF,$FF,$FF,$FF,$FF,$FF,$FF
+.db $FF,$FF,$FF,$FC,$3F,$FF,$FF,$FF,$FF,$FF,$FF,$FF,$FF,$FF,$FF,$FC
+.db $3F,$FF,$FF,$FF,$FF,$FF,$FF,$FF,$FF,$FF,$FF,$FC,$0F,$FF,$FF,$FF
+.db $FF,$FF,$FF,$FF,$FF,$FF,$FF,$F0,$03,$FF,$FF,$FF,$FF,$FF,$FF,$FF
+.db $FF,$FF,$FF,$C0,$01,$FF,$FF,$FF,$5F,$FF,$FF,$FF,$FF,$FF,$FF,$80
+.db $03,$FF,$FF,$FF,$BF,$FF,$FF,$FF,$FF,$FF,$FF,$C0,$0F,$FF,$FF,$FF
+.db $5F,$FF,$FF,$FF,$FF,$FF,$FF,$F0,$3F,$FF,$FF,$FF,$FF,$FF,$FF,$FF
+.db $FF,$FF,$FF,$FC,$3F,$FF,$FF,$FF,$FF,$FF,$FF,$FF,$FF,$FF,$FF,$FC
+.db $3F,$FF,$FF,$FF,$FF,$FF,$FF,$FF,$FF,$FF,$FF,$FC,$3F,$FF,$FF,$FF
+.db $FF,$FF,$FF,$F9,$FF,$FF,$FF,$FC,$0F,$FF,$FF,$FF,$FF,$FF,$FF,$F0
+.db $FF,$FF,$FF,$F0,$03,$FF,$FF,$FF,$FF,$FF,$FF,$FE,$FF,$FF,$7F,$C0
+.db $01,$FF,$FF,$FF,$FF,$FF,$FC,$0E,$FF,$FE,$3F,$80,$03,$FF,$FF,$FF
+.db $FF,$AF,$F8,$06,$FF,$FF,$7F,$C0,$0F,$FF,$FF,$FF,$FF,$DF,$F0,$00
+.db $FF,$FF,$FF,$F0,$3F,$FF,$FF,$FF,$FF,$AF,$E0,$01,$FF,$FF,$FF,$FC
+.db $3F,$FF,$FF,$FF,$FF,$FF,$E0,$01,$FF,$FF,$FF,$FC,$3F,$FF,$FF,$FF
+.db $FF,$FF,$E0,$01,$FF,$FF,$FF,$FC,$3F,$FF,$FF,$FF,$FF,$FF,$E0,$01
+.db $FF,$FF,$FF,$FC,$0F,$FF,$FF,$FF,$FF,$FF,$E0,$01,$FF,$FF,$FF,$F0
+.db $03,$FF,$FF,$FF,$FF,$FF,$D0,$03,$FF,$FF,$FF,$C0,$01,$FF,$FF,$FF
+.db $FF,$FF,$C8,$07,$FF,$FF,$FF,$80,$03,$FF,$FF,$FF,$FF,$FF,$D8,$0F
+.db $FF,$FF,$FF,$C0,$0F,$FF,$FF,$FF,$FF,$FF,$C1,$FF,$FF,$FF,$FF,$F0
+.db $3F,$FF,$FF,$FF,$FF,$FF,$FF,$FF,$FF,$EB,$FF,$FC,$3F,$FF,$FF,$FF
+.db $FF,$FF,$FF,$FF,$FF,$F7,$FF,$FC,$3F,$FF,$FF,$FF,$FF,$FF,$FF,$FF
+.db $FF,$EB,$FF,$FC,$3F,$FF,$FF,$FF,$FF,$FF,$FF,$FF,$FF,$FF,$FF,$FC
+
+Layer2:
+.db $CF,$FF,$FF,$FF,$FF,$FF,$FF,$FF,$FF,$FF,$FF,$F3,$F3,$FF,$FF,$FF
+.db $FF,$FF,$FF,$FF,$FF,$FF,$FF,$CF,$FD,$FF,$FF,$FF,$FF,$FF,$FF,$FF
+.db $FF,$E0,$FF,$BF,$FE,$FF,$FF,$FE,$BF,$FF,$FF,$FF,$FF,$C0,$7F,$7F
+.db $FD,$FF,$FF,$FF,$7F,$FF,$FF,$FF,$F8,$00,$3F,$BF,$F3,$FF,$FF,$FE
+.db $BF,$FF,$FF,$FF,$FB,$00,$1F,$CF,$CF,$FF,$FF,$FF,$FF,$FF,$7F,$FF
+.db $FF,$00,$1F,$F3,$DF,$FF,$FF,$FF,$FF,$FE,$3F,$FF,$FE,$00,$0F,$FB
+.db $DF,$FF,$FF,$FF,$FF,$FF,$7F,$FF,$F9,$80,$0F,$FB,$CF,$FF,$FF,$FF
+.db $FF,$FF,$FF,$FF,$FE,$C0,$07,$F3,$F3,$FF,$FF,$FF,$FF,$FF,$FF,$FF
+.db $FF,$70,$1B,$CF,$FD,$FF,$FF,$FF,$FF,$FF,$FF,$FF,$7F,$1F,$1F,$BF
+.db $FE,$FF,$FF,$FF,$FF,$FF,$FF,$FE,$3F,$81,$FF,$7F,$FD,$FF,$FF,$FF
+.db $FF,$FF,$FF,$FF,$7F,$C0,$03,$BF,$F3,$FF,$FF,$FF,$FF,$FF,$FF,$FF
+.db $FF,$E0,$FF,$CF,$CF,$FF,$FF,$FF,$FF,$FF,$FF,$FF,$FF,$FF,$FF,$F3
+.db $DF,$FF,$FF,$FF,$FF,$FF,$FF,$FF,$FF,$FF,$FF,$FB,$DF,$FF,$FF,$FF
+.db $FF,$FF,$FF,$FF,$FF,$FF,$FF,$FB,$C7,$FF,$FF,$FF,$FF,$FF,$FF,$FF
+.db $FF,$FF,$FF,$F3,$F3,$FF,$FF,$FF,$FF,$FF,$FF,$FF,$FF,$FF,$FF,$CF
+.db $FD,$FF,$FF,$FF,$FF,$FF,$FF,$FF,$FF,$FF,$FF,$BF,$FE,$FF,$FF,$FF
+.db $FB,$FF,$FF,$FF,$FF,$FF,$FF,$7F,$FD,$FF,$FF,$FF,$F1,$FF,$FF,$FF
+.db $FF,$FF,$FF,$BF,$F3,$FF,$FF,$FF,$FB,$FF,$FF,$FF,$FF,$FF,$FF,$CF
+.db $CF,$FF,$FF,$FF,$FF,$FF,$FD,$FF,$FF,$FF,$FF,$F3,$DF,$FF,$FF,$FF
+.db $FF,$FF,$F8,$FF,$FF,$FF,$FF,$FB,$DF,$FF,$FF,$FF,$FF,$FF,$FD,$FF
+.db $FF,$FF,$FF,$FB,$CF,$FF,$FF,$FF,$FF,$FF,$FF,$FF,$FF,$FF,$FF,$F3
+.db $F3,$FF,$FF,$FF,$FF,$FF,$FF,$FF,$FF,$FF,$FF,$CF,$FD,$FF,$FF,$FF
+.db $FF,$FF,$FF,$FF,$FF,$FF,$FF,$BF,$FE,$FF,$FF,$FF,$FF,$FF,$FF,$FF
+.db $AF,$FF,$FF,$7F,$FD,$FF,$FF,$FF,$FF,$FF,$FF,$FF,$DF,$FF,$FF,$BF
+.db $F3,$FF,$FF,$FF,$FF,$FF,$FF,$FF,$AF,$FF,$FF,$CF,$CF,$FF,$FF,$FF
+.db $FF,$FF,$FF,$FF,$FF,$FF,$FF,$F3,$DF,$FF,$FF,$FF,$FF,$FF,$FF,$FF
+.db $FF,$FF,$FF,$FB,$DF,$FF,$FF,$FF,$FF,$FF,$FF,$FF,$FF,$FF,$FF,$FB
+.db $CF,$FF,$DF,$FF,$FF,$FF,$FF,$FF,$FF,$FF,$FF,$F3,$F3,$FF,$8F,$FF
+.db $FF,$FF,$FF,$FF,$FF,$FF,$FF,$CF,$FD,$FF,$DF,$FF,$FF,$FF,$FF,$FF
+.db $FF,$FF,$FF,$BF,$FE,$FF,$FF,$FF,$5F,$FF,$FF,$FF,$FF,$FF,$FF,$7F
+.db $FD,$FF,$FF,$FF,$BF,$FF,$FF,$FF,$FF,$FF,$FF,$BF,$F3,$FF,$FF,$FF
+.db $5F,$FF,$FF,$FF,$FF,$FF,$FF,$CF,$CF,$FF,$FF,$FF,$FF,$FF,$FF,$FF
+.db $FF,$FF,$FF,$F3,$DF,$FF,$FF,$FF,$FF,$FF,$FF,$FF,$FF,$FF,$FF,$FB
+.db $DF,$FF,$FF,$FF,$FF,$FF,$FF,$FF,$FF,$FF,$FF,$FB,$CF,$FF,$FF,$FF
+.db $FF,$FF,$FF,$F9,$FF,$FF,$FF,$F3,$F3,$FF,$F5,$FF,$FF,$FF,$FF,$F0
+.db $FF,$FF,$FF,$CF,$FD,$FF,$FB,$FF,$FF,$FF,$FC,$0E,$FF,$FF,$FF,$BF
+.db $FE,$FF,$F5,$FF,$FF,$FF,$FB,$F6,$FF,$FF,$FF,$7F,$FD,$FF,$FF,$FF
+.db $FF,$AF,$F7,$FA,$FF,$FF,$FF,$BF,$F3,$FF,$FF,$FF,$FF,$DF,$EF,$FC
+.db $FF,$FF,$FF,$CF,$CF,$FF,$FF,$FF,$FF,$AF,$DF,$FC,$FF,$FF,$FF,$F3
+.db $DF,$FF,$FF,$FF,$FF,$FF,$DF,$F8,$FF,$FF,$FF,$FB,$DF,$FF,$FF,$FF
+.db $FF,$FF,$DF,$E2,$FF,$FF,$FF,$FB,$CF,$FF,$FF,$FF,$FF,$FF,$DF,$C6
+.db $FF,$FF,$FF,$F3,$F3,$FF,$FF,$FF,$FF,$FF,$DF,$8E,$FF,$FF,$FF,$CF
+.db $FD,$FF,$FF,$FF,$FF,$FF,$CF,$1D,$FF,$FF,$FF,$BF,$FE,$FF,$FF,$FF
+.db $FF,$FF,$C4,$3B,$FF,$FF,$FF,$7F,$FD,$FF,$FF,$FF,$FF,$FF,$D8,$77
+.db $FF,$FF,$FF,$BF,$F3,$FF,$FF,$FF,$FF,$FF,$C0,$0F,$FF,$FF,$FF,$CF
+.db $CF,$FF,$FF,$FF,$FF,$FF,$FF,$FF,$FF,$FF,$FF,$F3,$DF,$FF,$FF,$FF
+.db $FF,$FF,$FF,$FF,$FF,$FF,$FF,$FB,$DF,$FF,$FF,$FF,$FF,$FF,$FF,$FF
+.db $FF,$FF,$FF,$FB,$CF,$FF,$FF,$FF,$FF,$FF,$FF,$FF,$FF,$FF,$FF,$F3
+
+Buffer1:
+	.db 0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0
+	.db 0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0
+	.db 0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0
+	.db 0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0
+	.db 0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0
+	.db 0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0
+	.db 0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0
+	.db 0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0
+	.db 0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0
+	.db 0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0
+	.db 0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0
+	.db 0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0
+	.db 0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0
+	.db 0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0
+	.db 0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0
+	.db 0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0
+	.db 0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0
+	.db 0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0
+	.db 0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0
+	.db 0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0
+	.db 0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0
+	.db 0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0
+	.db 0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0
+	.db 0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0
+	.db 0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0
+	.db 0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0
+	.db 0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0
+	.db 0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0
+	.db 0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0
+	.db 0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0
+	.db 0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0
+	.db 0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0
+Buffer2:
+	.db 0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0
+	.db 0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0
+	.db 0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0
+	.db 0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0
+	.db 0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0
+	.db 0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0
+	.db 0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0
+	.db 0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0
+	.db 0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0
+	.db 0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0
+	.db 0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0
+	.db 0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0
+	.db 0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0
+	.db 0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0
+	.db 0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0
+	.db 0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0
+	.db 0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0
+	.db 0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0
+	.db 0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0
+	.db 0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0
+	.db 0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0
+	.db 0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0
+	.db 0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0
+	.db 0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0
+	.db 0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0
+	.db 0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0
+	.db 0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0
+	.db 0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0
+	.db 0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0
+	.db 0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0
+	.db 0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0
+	.db 0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0
+
+Image2_Layer1:
+.db $FF,$FF,$FF,$FF,$FF,$FF,$FF,$FF,$FF,$FF,$FF,$FF,$FF,$FF,$FF,$FF
+.db $FF,$FF,$FF,$FF,$FF,$FF,$FF,$FF,$D5,$55,$55,$55,$55,$55,$55,$55
+.db $55,$55,$55,$57,$C0,$00,$00,$01,$12,$B8,$4A,$EC,$80,$00,$00,$03
+.db $E0,$00,$00,$02,$AB,$A0,$AA,$8A,$80,$00,$00,$07,$E0,$00,$00,$02
+.db $3A,$B0,$AA,$CC,$80,$00,$00,$07,$E0,$00,$00,$02,$AA,$A0,$AE,$8A
+.db $00,$00,$00,$07,$C0,$00,$00,$01,$AA,$B8,$44,$EA,$80,$00,$00,$03
+.db $EA,$AA,$AA,$AA,$AA,$AA,$AA,$AA,$AA,$AA,$AA,$AB,$FF,$FF,$FF,$FF
+.db $FF,$FF,$FF,$FF,$FF,$FF,$FF,$FF,$FF,$FF,$FF,$FF,$FF,$FF,$FF,$FF
+.db $FF,$FF,$FF,$FF
+
+Image2_Layer2:
+.db $FF,$FF,$FF,$FF,$FF,$FF,$FF,$FF,$FF,$FF,$FF,$FF,$80,$00,$00,$00
+.db $00,$00,$00,$00,$00,$00,$00,$01,$AA,$AA,$AA,$AA,$AA,$AA,$AA,$AA
+.db $AA,$AA,$AA,$A9,$BF,$FF,$FF,$FF,$FF,$FF,$FF,$FF,$FF,$FF,$FF,$FD
+.db $9F,$FF,$FF,$FF,$FF,$FF,$FF,$FF,$FF,$FF,$FF,$F9,$9F,$FF,$FF,$FF
+.db $FF,$FF,$FF,$FF,$FF,$FF,$FF,$F9,$9F,$FF,$FF,$FF,$FF,$FF,$FF,$FF
+.db $FF,$FF,$FF,$F9,$BF,$FF,$FF,$FF,$FF,$FF,$FF,$FF,$FF,$FF,$FF,$FD
+.db $95,$55,$55,$55,$55,$55,$55,$55,$55,$55,$55,$55,$80,$00,$00,$00
+.db $00,$00,$00,$00,$00,$00,$00,$01,$FF,$FF,$FF,$FF,$FF,$FF,$FF,$FF
+.db $FF,$FF,$FF,$FF
+
+Press:
+.db $FF,$FF,$FF,$FF,$FF,$FF,$FF,$FF,$FF,$FF,$FF,$FF,$FF,$FF,$FF,$FF
+.db $FF,$FF,$FF,$FF,$FF,$FF,$FF,$FF,$C0,$00,$E0,$00,$00,$00,$0F,$00
+.db $00,$00,$00,$03,$C0,$00,$90,$00,$00,$00,$10,$10,$00,$04,$00,$03
+.db $C0,$00,$90,$00,$00,$00,$20,$10,$00,$04,$00,$03,$C0,$00,$92,$CE
+.db $3C,$F0,$20,$7C,$72,$DF,$00,$03,$C0,$00,$93,$51,$45,$10,$1E,$10
+.db $93,$44,$00,$03,$C0,$00,$E2,$52,$30,$C0,$01,$11,$12,$44,$00,$03
+.db $C0,$00,$82,$1C,$08,$20,$01,$11,$12,$04,$00,$03,$C0,$00,$82,$11
+.db $04,$10,$42,$11,$12,$04,$00,$03,$C0,$00,$82,$0E,$79,$E0,$3C,$10
+.db $EA,$04,$00,$03,$C0,$00,$00,$00,$00,$00,$00,$00,$00,$00,$00,$03
+.db $FF,$FF,$FF,$FF,$FF,$FF,$FF,$FF,$FF,$FF,$FF,$FF,$FF,$FF,$FF,$FF
+.db $FF,$FF,$FF,$FF,$FF,$FF,$FF,$FF
+
+Press2:
+.db $FF,$FF,$FF,$FF,$FF,$FF,$FF,$FF,$FF,$FF,$FF,$FF,$80,$00,$00,$00
+.db $00,$00,$00,$00,$00,$00,$00,$01,$BF,$FF,$FF,$FF,$FF,$FF,$FF,$FF
+.db $FF,$FF,$FF,$FD,$BF,$FF,$FF,$FF,$FF,$FF,$FF,$FF,$FF,$FF,$FF,$FD
+.db $BF,$FF,$FF,$FF,$FF,$FF,$FF,$FF,$FF,$FF,$FF,$FD,$BF,$FF,$FF,$FF
+.db $FF,$FF,$FF,$FF,$FF,$FF,$FF,$FD,$BF,$FF,$FF,$FF,$FF,$FF,$FF,$FF
+.db $FF,$FF,$FF,$FD,$BF,$FF,$FF,$FF,$FF,$FF,$FF,$FF,$FF,$FF,$FF,$FD
+.db $BF,$FF,$FF,$FF,$FF,$FF,$FF,$FF,$FF,$FF,$FF,$FD,$BF,$FF,$FF,$FF
+.db $FF,$FF,$FF,$FF,$FF,$FF,$FF,$FD,$BF,$FF,$FF,$FF,$FF,$FF,$FF,$FF
+.db $FF,$FF,$FF,$FD,$BF,$FF,$FF,$FF,$FF,$FF,$FF,$FF,$FF,$FF,$FF,$FD
+.db $80,$00,$00,$00,$00,$00,$00,$00,$00,$00,$00,$01,$FF,$FF,$FF,$FF
+.db $FF,$FF,$FF,$FF,$FF,$FF,$FF,$FF
+
+box:
+.db $FF,$FF,$FF,$FF,$FF,$FF,$FF,$FF,$FF,$FF,$FF,$FF,$FF,$FF,$FF,$FF
+.db $FF,$FF,$FF,$FF,$FF,$FF,$FF,$FF,$C0,$00,$00,$00,$00,$00,$00,$00
+.db $00,$00,$00,$03,$C0,$00,$00,$00,$00,$00,$00,$00,$00,$00,$00,$03
+.db $C0,$00,$00,$00,$00,$00,$00,$00,$00,$00,$00,$03,$C0,$00,$00,$00
+.db $00,$00,$00,$00,$00,$00,$00,$03,$C0,$00,$00,$00,$00,$00,$00,$00
+.db $00,$00,$00,$03,$C0,$00,$00,$00,$00,$00,$00,$00,$00,$00,$00,$03
+.db $C0,$00,$00,$00,$00,$00,$00,$00,$00,$00,$00,$03,$C0,$00,$00,$00
+.db $00,$00,$00,$00,$00,$00,$00,$03,$C0,$00,$00,$00,$00,$00,$00,$00
+.db $00,$00,$00,$03,$C0,$00,$00,$00,$00,$00,$00,$00,$00,$00,$00,$03
+.db $FF,$FF,$FF,$FF,$FF,$FF,$FF,$FF,$FF,$FF,$FF,$FF,$FF,$FF,$FF,$FF
+.db $FF,$FF,$FF,$FF,$FF,$FF,$FF,$FF
+
+box2:
+.db $FF,$FF,$FF,$FF,$FF,$FF,$FF,$FF,$FF,$FF,$FF,$FF,$80,$00,$00,$00
+.db $00,$00,$00,$00,$00,$00,$00,$01,$BF,$FF,$FF,$FF,$FF,$FF,$FF,$FF
+.db $FF,$FF,$FF,$FD,$BF,$FF,$FF,$FF,$FF,$FF,$FF,$FF,$FF,$FF,$FF,$FD
+.db $BF,$FF,$FF,$FF,$FF,$FF,$FF,$FF,$FF,$FF,$FF,$FD,$BF,$FF,$FF,$FF
+.db $FF,$FF,$FF,$FF,$FF,$FF,$FF,$FD,$BF,$FF,$FF,$FF,$FF,$FF,$FF,$FF
+.db $FF,$FF,$FF,$FD,$BF,$FF,$FF,$FF,$FF,$FF,$FF,$FF,$FF,$FF,$FF,$FD
+.db $BF,$FF,$FF,$FF,$FF,$FF,$FF,$FF,$FF,$FF,$FF,$FD,$BF,$FF,$FF,$FF
+.db $FF,$FF,$FF,$FF,$FF,$FF,$FF,$FD,$BF,$FF,$FF,$FF,$FF,$FF,$FF,$FF
+.db $FF,$FF,$FF,$FD,$BF,$FF,$FF,$FF,$FF,$FF,$FF,$FF,$FF,$FF,$FF,$FD
+.db $80,$00,$00,$00,$00,$00,$00,$00,$00,$00,$00,$01,$FF,$FF,$FF,$FF
+.db $FF,$FF,$FF,$FF,$FF,$FF,$FF,$FF
+
+Title:
+.db $00,$00,$00,$00,$00,$00,$00,$00,$00,$00,$00,$00,$1F,$FF,$FF,$FF
+.db $FF,$FF,$FF,$FF,$FF,$FF,$FF,$F0,$3F,$FF,$FF,$FF,$FF,$FF,$FF,$FF
+.db $FF,$FF,$FF,$F8,$3F,$FF,$FF,$FF,$E3,$FF,$1F,$FF,$F8,$FF,$FF,$F8
+.db $7F,$9F,$FF,$FF,$E2,$3F,$11,$FF,$F8,$FF,$FF,$FC,$7F,$0F,$FF,$FF
+.db $E2,$3F,$11,$FF,$18,$FF,$FF,$FC,$7E,$0F,$FF,$FF,$FE,$3F,$F1,$FF
+.db $1F,$FF,$FF,$FC,$7E,$0F,$88,$C4,$62,$23,$11,$82,$08,$E1,$C4,$7C
+.db $7E,$47,$80,$40,$22,$01,$11,$80,$08,$C0,$C0,$3C,$7C,$47,$80,$40
+.db $22,$01,$11,$E0,$08,$80,$40,$3C,$7C,$07,$8C,$46,$22,$31,$11,$81
+.db $18,$8C,$46,$3C,$78,$03,$8C,$46,$22,$31,$11,$01,$18,$8C,$46,$3C
+.db $78,$03,$8C,$46,$22,$31,$11,$01,$08,$80,$46,$3C,$78,$F3,$8C,$42
+.db $22,$31,$11,$01,$08,$C0,$C6,$3C,$78,$F1,$8C,$46,$22,$31,$11,$81
+.db $88,$E1,$C6,$3C,$7F,$FF,$FF,$FF,$FF,$FF,$FF,$FF,$FF,$FF,$FF,$FC
+.db $7F,$FF,$FF,$FF,$FF,$FF,$FF,$FF,$FF,$FF,$FF,$FC,$7F,$FF,$FF,$FF
+.db $FF,$9F,$FF,$FF,$C1,$FF,$FF,$FC,$7F,$FF,$FF,$FF,$FF,$0F,$FF,$FF
+.db $DC,$7F,$FF,$FC,$7F,$FF,$FF,$FF,$FF,$0F,$FF,$FF,$D1,$9F,$FF,$FC
+.db $7F,$FF,$FB,$BF,$DF,$0F,$FF,$FF,$D3,$C7,$FF,$FC,$7F,$FF,$DD,$03
+.db $F0,$BF,$FF,$FF,$DF,$03,$FF,$FC,$7F,$FF,$FC,$8E,$F7,$AF,$FF,$BF
+.db $DE,$09,$FF,$FC,$7F,$FF,$FC,$85,$F4,$6F,$FF,$BF,$DC,$04,$FF,$FC
+.db $7F,$FF,$FC,$1F,$FF,$47,$39,$98,$08,$00,$FF,$FC,$7F,$FF,$FF,$6F
+.db $FD,$6E,$DB,$B8,$00,$02,$7F,$FC,$7F,$F8,$FF,$FF,$FE,$EF,$DB,$BF
+.db $F2,$01,$1F,$FC,$7F,$F8,$FF,$FF,$F6,$AE,$DA,$BF,$F0,$00,$03,$FC
+.db $7F,$FC,$7F,$FB,$F1,$E6,$5A,$9B,$F8,$80,$83,$FC,$7F,$FE,$3C,$3D
+.db $FF,$FF,$FE,$70,$08,$00,$01,$FC,$7F,$FF,$EE,$FA,$F7,$65,$00,$00
+.db $04,$20,$00,$FC,$7F,$FF,$E0,$FF,$FF,$FC,$80,$00,$00,$00,$00,$FC
+.db $7F,$FF,$F9,$3F,$FF,$FE,$00,$00,$00,$00,$00,$7C,$7F,$FF,$FC,$3F
+.db $EF,$FF,$00,$00,$00,$00,$18,$7C,$7F,$FF,$FE,$EE,$FF,$DF,$00,$00
+.db $00,$00,$10,$3C,$7F,$FF,$FB,$6E,$FF,$FE,$00,$00,$00,$00,$10,$3C
+.db $7F,$FF,$FF,$6E,$FF,$8F,$3D,$FF,$78,$01,$30,$FC,$7F,$FF,$FF,$E0
+.db $AC,$50,$C3,$50,$C4,$06,$CC,$FC,$7F,$FF,$FF,$EE,$AB,$D7,$DB,$76
+.db $BC,$04,$00,$7C,$7F,$FF,$FF,$EA,$AF,$14,$5B,$50,$F0,$00,$03,$3C
+.db $7F,$FF,$FF,$EE,$AD,$D7,$DB,$57,$DC,$00,$01,$3C,$7E,$FD,$FF,$EE
+.db $AC,$50,$C3,$52,$44,$00,$02,$3C,$7F,$FF,$FF,$FF,$BB,$8F,$3D,$CF
+.db $B8,$00,$04,$04,$7F,$FF,$FF,$FD,$C0,$E0,$00,$00,$00,$00,$00,$04
+.db $7F,$FF,$FF,$FF,$F0,$20,$00,$00,$00,$00,$00,$04,$7F,$FF,$FF,$FF
+.db $FC,$00,$1C,$00,$00,$00,$00,$04,$7F,$FF,$FF,$FF,$FF,$E0,$14,$00
+.db $06,$00,$00,$04,$7F,$FF,$FF,$FF,$FE,$30,$1F,$80,$10,$00,$00,$04
+.db $7F,$FF,$FF,$FF,$FD,$D0,$02,$80,$98,$00,$00,$04,$7F,$FF,$FF,$FF
+.db $FD,$DF,$FE,$C0,$FC,$00,$00,$04,$7F,$FF,$FF,$FF,$FD,$DD,$B4,$70
+.db $FC,$00,$00,$04,$7F,$FF,$FF,$FF,$FD,$DD,$B6,$C0,$6C,$00,$40,$04
+.db $7F,$FF,$FF,$FF,$FD,$DD,$B6,$80,$7E,$92,$60,$04,$7F,$FF,$FF,$FF
+.db $FD,$BD,$B6,$C1,$FF,$FE,$22,$04,$7F,$FF,$FF,$FF,$FE,$3C,$B6,$40
+.db $02,$32,$CC,$04,$7F,$FF,$FF,$FF,$FF,$DF,$FF,$E2,$00,$A0,$F8,$04
+.db $5F,$FF,$FF,$FF,$FF,$FF,$FF,$F3,$1F,$76,$FE,$04,$7F,$FF,$FF,$FF
+.db $FF,$FF,$FF,$7C,$D6,$F5,$41,$04,$7F,$FF,$FF,$FF,$FF,$FF,$FF,$FE
+.db $F7,$D7,$63,$04,$7F,$FF,$FF,$FF,$FF,$FF,$FF,$FF,$FF,$7F,$7C,$04
+.db $3F,$FF,$FF,$FF,$FF,$FF,$FF,$EF,$FF,$77,$FF,$A8,$3F,$FF,$FF,$FD
+.db $FF,$FF,$FF,$EF,$FE,$77,$FF,$B8,$1F,$FF,$FF,$FF,$FF,$FF,$FF,$FF
+.db $FF,$FF,$FF,$F0,$00,$00,$00,$00,$00,$00,$00,$00,$00,$00,$00,$00
+
+Title2:
+.db $00,$00,$00,$00,$00,$00,$00,$00,$00,$00,$00,$00,$1F,$FF,$FF,$FF
+.db $FF,$FF,$FF,$FF,$FF,$FF,$FF,$F8,$2F,$6F,$FF,$EE,$FF,$FC,$CF,$07
+.db $DF,$FE,$FF,$FC,$3B,$EF,$FE,$78,$63,$FC,$18,$2F,$F8,$F9,$FF,$7C
+.db $7F,$9F,$FF,$F6,$EA,$2F,$51,$EF,$FA,$FE,$ED,$FE,$7F,$6F,$F6,$34
+.db $62,$9A,$15,$CF,$18,$C7,$FF,$FE,$7E,$A7,$FC,$BF,$B2,$A3,$F5,$CF
+.db $58,$FD,$FF,$FE,$7E,$A7,$80,$C4,$60,$A3,$05,$80,$48,$A1,$C4,$56
+.db $78,$56,$26,$53,$28,$99,$54,$9C,$EA,$DE,$93,$2E,$59,$53,$11,$48
+.db $8A,$44,$55,$E4,$42,$B3,$48,$9E,$6D,$01,$2D,$54,$A8,$95,$55,$85
+.db $42,$AD,$56,$86,$73,$F9,$A5,$52,$A8,$85,$44,$75,$5A,$A5,$56,$BE
+.db $73,$0A,$21,$14,$88,$84,$44,$45,$4A,$B3,$56,$96,$6A,$00,$21,$16
+.db $88,$B5,$45,$75,$6A,$DE,$D6,$AE,$70,$00,$00,$00,$00,$00,$00,$81
+.db $08,$E1,$C2,$26,$6C,$00,$00,$00,$20,$03,$31,$20,$E2,$5F,$D9,$FE
+.db $70,$00,$00,$00,$00,$00,$C1,$81,$9A,$3F,$B7,$FE,$6C,$09,$C0,$00
+.db $00,$60,$0E,$11,$9C,$0F,$4F,$E6,$60,$01,$00,$00,$00,$F0,$00,$C0
+.db $43,$AF,$A7,$E6,$60,$00,$00,$00,$00,$90,$40,$20,$6E,$5F,$94,$BE
+.db $52,$00,$04,$40,$2F,$90,$00,$00,$2C,$30,$F8,$BE,$40,$00,$22,$FC
+.db $1F,$F8,$00,$E2,$20,$F9,$FD,$2E,$60,$00,$03,$71,$1F,$F8,$00,$E0
+.db $01,$75,$2C,$56,$74,$00,$03,$7A,$1F,$FD,$EF,$F0,$02,$FA,$6C,$96
+.db $68,$00,$03,$EF,$CE,$FD,$FF,$F7,$F7,$FF,$4F,$BE,$61,$00,$00,$9F
+.db $C7,$FF,$FF,$F7,$EF,$FD,$4B,$6E,$78,$07,$00,$00,$1F,$BB,$FE,$E0
+.db $0D,$FE,$9B,$66,$7C,$07,$00,$00,$1F,$FF,$FF,$F0,$07,$EF,$FB,$FE
+.db $66,$03,$80,$04,$1F,$BF,$FF,$F4,$07,$7F,$7C,$FE,$73,$01,$C3,$C2
+.db $0F,$1F,$FF,$FF,$F3,$FF,$FC,$2E,$7B,$00,$11,$05,$08,$9A,$FF,$FF
+.db $F9,$DF,$FE,$2E,$7F,$80,$1F,$00,$00,$03,$7F,$FF,$FE,$FF,$FF,$0E
+.db $7B,$90,$06,$C0,$38,$01,$FF,$FF,$FF,$FF,$FF,$1E,$7F,$78,$03,$FB
+.db $B8,$00,$FF,$FF,$FF,$FF,$E7,$86,$7F,$42,$01,$3B,$B8,$20,$FF,$FF
+.db $FE,$FF,$EB,$86,$73,$F4,$04,$BB,$80,$01,$FF,$FF,$FE,$FF,$EE,$06
+.db $75,$D8,$00,$BF,$BF,$FF,$FF,$FF,$FF,$FE,$CC,$06,$5E,$F4,$1F,$BF
+.db $FF,$FF,$FF,$FF,$FF,$F9,$32,$06,$5E,$DD,$1F,$BF,$FF,$FF,$FF,$FF
+.db $FF,$FA,$FF,$86,$5E,$9C,$04,$3F,$FF,$FF,$7F,$DF,$FF,$FD,$7C,$86
+.db $7E,$F2,$30,$3B,$FF,$FF,$FF,$DF,$FF,$DD,$FE,$86,$77,$E3,$C0,$3B
+.db $FF,$FF,$FF,$DF,$FF,$ED,$BD,$86,$67,$FB,$00,$3B,$FF,$FF,$3D,$CF
+.db $BF,$F5,$DB,$FE,$4F,$F0,$40,$02,$3F,$1C,$00,$00,$FF,$F9,$EF,$DE
+.db $5F,$EF,$00,$00,$0F,$D8,$00,$00,$FF,$FF,$F7,$1E,$7F,$FE,$D2,$00
+.db $03,$FF,$1C,$00,$7F,$FF,$F8,$BE,$7D,$06,$E5,$80,$03,$FF,$FC,$03
+.db $F9,$BF,$FF,$FE,$7D,$FB,$B7,$20,$03,$FC,$FF,$83,$EF,$FF,$FF,$FE
+.db $7C,$FF,$82,$00,$07,$FD,$FF,$EB,$67,$FF,$FF,$FE,$7E,$C4,$D0,$C0
+.db $07,$77,$FF,$F7,$03,$FF,$FF,$FE,$7F,$C6,$C8,$E0,$07,$77,$FF,$CF
+.db $03,$FF,$FF,$FE,$7E,$A4,$A1,$CB,$F7,$77,$FF,$FF,$93,$FF,$BF,$FE
+.db $5F,$DE,$51,$03,$F7,$77,$FF,$FF,$81,$6D,$9F,$FE,$7F,$FC,$A8,$F8
+.db $07,$E7,$FF,$FE,$00,$01,$DD,$FE,$79,$97,$4E,$0A,$07,$E7,$FF,$FF
+.db $FD,$CD,$33,$FE,$5F,$9B,$D8,$7C,$23,$F3,$FD,$DD,$FF,$5F,$07,$FE
+.db $77,$F7,$B8,$7D,$00,$38,$00,$0F,$F3,$FF,$77,$FE,$7F,$C3,$32,$E7
+.db $20,$00,$00,$87,$3D,$5F,$FF,$FE,$7F,$E3,$FE,$D0,$B8,$00,$00,$05
+.db $1D,$7D,$FE,$FE,$7F,$3B,$F5,$B7,$E0,$00,$00,$04,$55,$D5,$C7,$FE
+.db $3F,$3F,$FE,$BA,$3F,$80,$00,$13,$73,$FD,$77,$5C,$3F,$FF,$B4,$17
+.db $7F,$00,$00,$10,$01,$88,$00,$4C,$1F,$FF,$FF,$FF,$FF,$FF,$FF,$FF
+.db $FF,$FF,$FF,$F8,$1F,$FF,$FF,$FF,$FF,$FF,$FF,$FF,$FF,$FF,$FF,$F0
+
+scorehi:
+.db $00,$00,$00,$00,$00,$00,$00,$00,$00,$00,$00,$00,$1F,$FF,$FF,$FF
+.db $FF,$FF,$FF,$FF,$FF,$FF,$FF,$F8,$20,$00,$00,$00,$00,$00,$00,$00
+.db $00,$00,$00,$0C,$20,$00,$00,$00,$00,$00,$00,$00,$00,$00,$00,$0C
+.db $40,$00,$00,$00,$00,$00,$00,$00,$00,$00,$00,$06,$40,$00,$00,$0E
+.db $00,$00,$00,$00,$00,$00,$00,$06,$40,$00,$00,$0E,$00,$00,$00,$00
+.db $00,$00,$38,$06,$40,$00,$1D,$CE,$00,$00,$00,$00,$00,$00,$FE,$06
+.db $40,$00,$1D,$C0,$00,$00,$00,$00,$00,$00,$FF,$06,$40,$00,$1D,$CE
+.db $79,$E3,$E3,$DF,$1E,$03,$FF,$86,$40,$00,$1F,$CE,$FB,$F7,$F3,$FF
+.db $BE,$03,$FF,$86,$40,$00,$1F,$CE,$E3,$F7,$F3,$FF,$B8,$00,$FF,$C6
+.db $40,$00,$1F,$CE,$7B,$87,$73,$BF,$9E,$06,$3F,$C6,$40,$00,$1D,$CE
+.db $3F,$F7,$F3,$BC,$0F,$03,$8F,$86,$40,$00,$1D,$CE,$7F,$F7,$F3,$9F
+.db $9F,$03,$E3,$86,$40,$00,$1D,$CE,$F9,$E3,$E3,$9F,$3E,$01,$F8,$06
+.db $40,$00,$00,$00,$00,$00,$00,$00,$00,$00,$FE,$06,$40,$30,$00,$00
+.db $00,$00,$00,$00,$00,$00,$38,$06,$40,$50,$00,$00,$00,$00,$00,$00
+.db $00,$00,$00,$06,$43,$90,$00,$00,$00,$00,$00,$00,$00,$00,$00,$06
+.db $42,$10,$00,$00,$00,$00,$00,$00,$00,$00,$00,$06,$43,$D0,$00,$00
+.db $00,$00,$00,$00,$00,$00,$00,$06,$40,$50,$00,$00,$00,$00,$00,$00
+.db $00,$00,$00,$06,$40,$57,$00,$00,$00,$00,$00,$00,$00,$00,$00,$06
+.db $40,$55,$00,$00,$00,$00,$00,$00,$00,$00,$00,$06,$40,$77,$00,$00
+.db $00,$00,$00,$00,$00,$00,$00,$06,$40,$00,$00,$00,$00,$00,$00,$00
+.db $00,$00,$00,$06,$40,$00,$00,$00,$00,$00,$00,$00,$00,$00,$00,$06
+.db $40,$00,$00,$00,$00,$00,$00,$00,$00,$00,$00,$06,$40,$00,$00,$00
+.db $00,$00,$00,$00,$00,$00,$00,$06,$40,$00,$00,$00,$00,$00,$00,$00
+.db $00,$00,$00,$06,$40,$00,$00,$00,$00,$00,$00,$00,$00,$00,$00,$06
+.db $43,$C0,$00,$00,$00,$00,$00,$00,$00,$00,$00,$06,$44,$60,$00,$00
+.db $00,$00,$00,$00,$00,$00,$00,$06,$47,$A0,$00,$00,$00,$00,$00,$00
+.db $00,$00,$00,$06,$40,$A0,$00,$00,$00,$00,$00,$00,$00,$00,$00,$06
+.db $40,$C0,$00,$00,$00,$00,$00,$00,$00,$00,$00,$06,$41,$00,$00,$00
+.db $00,$00,$00,$00,$00,$00,$00,$06,$43,$E7,$00,$00,$00,$00,$00,$00
+.db $00,$00,$00,$06,$44,$25,$00,$00,$00,$00,$00,$00,$00,$00,$00,$06
+.db $47,$E7,$00,$00,$00,$00,$00,$00,$00,$00,$00,$06,$40,$00,$00,$00
+.db $00,$00,$00,$00,$00,$00,$00,$06,$40,$00,$00,$00,$00,$00,$00,$00
+.db $00,$00,$00,$06,$40,$00,$00,$00,$00,$00,$00,$00,$00,$00,$00,$06
+.db $40,$00,$00,$00,$00,$00,$00,$00,$00,$00,$00,$06,$40,$00,$00,$00
+.db $00,$00,$00,$00,$00,$00,$00,$06,$40,$00,$00,$00,$00,$00,$00,$00
+.db $00,$00,$00,$06,$43,$C0,$00,$00,$00,$00,$00,$00,$00,$00,$00,$06
+.db $44,$20,$00,$00,$00,$00,$00,$00,$00,$00,$00,$06,$47,$A0,$00,$00
+.db $00,$00,$00,$00,$3F,$FF,$FF,$C6,$41,$40,$00,$00,$00,$00,$00,$00
+.db $40,$00,$00,$26,$41,$A0,$00,$00,$00,$00,$00,$00,$5C,$04,$00,$26
+.db $40,$A0,$00,$00,$00,$00,$00,$00,$51,$44,$65,$26,$47,$A7,$00,$00
+.db $00,$00,$00,$00,$59,$AE,$96,$A6,$44,$65,$00,$00,$00,$00,$00,$00
+.db $51,$24,$F4,$26,$43,$C7,$00,$00,$00,$00,$00,$00,$51,$24,$84,$26
+.db $40,$00,$00,$00,$00,$00,$00,$00,$5D,$24,$74,$26,$40,$00,$00,$00
+.db $00,$00,$00,$00,$40,$00,$00,$26,$40,$00,$00,$00,$00,$00,$00,$00
+.db $3F,$FF,$FF,$C6,$40,$00,$00,$00,$00,$00,$00,$00,$00,$00,$00,$06
+.db $20,$00,$00,$00,$00,$00,$00,$00,$00,$00,$00,$0C,$20,$00,$00,$00
+.db $00,$00,$00,$00,$00,$00,$00,$0C,$1F,$FF,$FF,$FF,$FF,$FF,$FF,$FF
+.db $FF,$FF,$FF,$F8,$1F,$FF,$FF,$FF,$FF,$FF,$FF,$FF,$FF,$FF,$FF,$F0
+
+scorehi2:
+.db $00,$00,$00,$00,$00,$00,$00,$00,$00,$00,$00,$00,$1F,$FF,$FF,$FF
+.db $FF,$FF,$FF,$FF,$FF,$FF,$FF,$F0,$20,$00,$00,$00,$00,$00,$00,$00
+.db $00,$00,$00,$08,$20,$00,$00,$00,$00,$00,$00,$00,$00,$00,$00,$08
+.db $40,$00,$00,$00,$00,$00,$00,$00,$00,$00,$00,$04,$40,$00,$00,$0E
+.db $00,$00,$00,$00,$00,$00,$00,$04,$40,$00,$00,$0A,$00,$00,$00,$00
+.db $00,$00,$00,$04,$40,$00,$1D,$CE,$00,$00,$00,$00,$00,$0E,$00,$04
+.db $40,$00,$15,$40,$00,$00,$00,$00,$00,$1F,$00,$04,$40,$00,$15,$4E
+.db $79,$E3,$E3,$DF,$1E,$1C,$00,$04,$40,$00,$17,$4A,$9B,$16,$33,$75
+.db $A6,$0C,$00,$04,$40,$00,$10,$4A,$A2,$F5,$D2,$EE,$A8,$07,$00,$04
+.db $40,$00,$17,$4A,$5A,$85,$D2,$AF,$96,$01,$C0,$04,$40,$00,$15,$4A
+.db $36,$F5,$D2,$AC,$0D,$00,$70,$64,$40,$00,$15,$4A,$47,$16,$32,$93
+.db $91,$00,$1C,$64,$40,$00,$1D,$CE,$F9,$E3,$E3,$9F,$3E,$00,$07,$E4
+.db $40,$00,$00,$00,$00,$00,$00,$00,$00,$00,$01,$E4,$40,$00,$00,$00
+.db $00,$00,$00,$00,$00,$00,$00,$04,$40,$20,$00,$00,$00,$00,$00,$00
+.db $00,$00,$00,$04,$40,$60,$00,$00,$00,$00,$00,$00,$00,$00,$00,$04
+.db $41,$E0,$00,$00,$00,$00,$00,$00,$00,$00,$00,$04,$40,$20,$00,$00
+.db $00,$00,$00,$00,$00,$00,$00,$04,$40,$20,$00,$00,$00,$00,$00,$00
+.db $00,$00,$00,$04,$40,$20,$00,$00,$00,$00,$00,$00,$00,$00,$00,$04
+.db $40,$22,$00,$00,$00,$00,$00,$00,$00,$00,$00,$04,$40,$00,$00,$00
+.db $00,$00,$00,$00,$00,$00,$00,$04,$40,$00,$00,$00,$00,$00,$00,$00
+.db $00,$00,$00,$04,$40,$00,$00,$00,$00,$00,$00,$00,$00,$00,$00,$04
+.db $40,$00,$00,$00,$00,$00,$00,$00,$00,$00,$00,$04,$40,$00,$00,$00
+.db $00,$00,$00,$00,$00,$00,$00,$04,$40,$00,$00,$00,$00,$00,$00,$00
+.db $00,$00,$00,$04,$40,$00,$00,$00,$00,$00,$00,$00,$00,$00,$00,$04
+.db $40,$00,$00,$00,$00,$00,$00,$00,$00,$00,$00,$04,$43,$80,$00,$00
+.db $00,$00,$00,$00,$00,$00,$00,$04,$40,$40,$00,$00,$00,$00,$00,$00
+.db $00,$00,$00,$04,$40,$40,$00,$00,$00,$00,$00,$00,$00,$00,$00,$04
+.db $40,$00,$00,$00,$00,$00,$00,$00,$00,$00,$00,$04,$40,$00,$00,$00
+.db $00,$00,$00,$00,$00,$00,$00,$04,$40,$00,$00,$00,$00,$00,$00,$00
+.db $00,$00,$00,$04,$43,$C2,$00,$00,$00,$00,$00,$00,$00,$00,$00,$04
+.db $40,$00,$00,$00,$00,$00,$00,$00,$00,$00,$00,$04,$40,$00,$00,$00
+.db $00,$00,$00,$00,$00,$00,$00,$04,$40,$00,$00,$00,$00,$00,$00,$00
+.db $00,$00,$00,$04,$40,$00,$00,$00,$00,$00,$00,$00,$00,$00,$00,$04
+.db $40,$00,$00,$00,$00,$00,$00,$00,$00,$00,$00,$04,$40,$00,$00,$00
+.db $00,$00,$00,$00,$00,$00,$00,$04,$40,$00,$00,$00,$00,$00,$00,$00
+.db $00,$00,$00,$04,$40,$00,$00,$00,$00,$00,$00,$00,$00,$00,$00,$04
+.db $43,$C0,$00,$00,$00,$00,$00,$00,$00,$00,$00,$04,$40,$40,$00,$00
+.db $00,$00,$00,$00,$3F,$FF,$FF,$C4,$40,$80,$00,$00,$00,$00,$00,$00
+.db $7F,$FF,$FF,$E4,$40,$40,$00,$00,$00,$00,$00,$00,$7F,$FF,$FF,$E4
+.db $40,$40,$00,$00,$00,$00,$00,$00,$7F,$FF,$FF,$E4,$40,$40,$00,$00
+.db $00,$00,$00,$00,$7F,$FF,$FF,$E4,$43,$82,$00,$00,$00,$00,$00,$00
+.db $7F,$FF,$FF,$E4,$40,$00,$00,$00,$00,$00,$00,$00,$7F,$FF,$FF,$E4
+.db $40,$00,$00,$00,$00,$00,$00,$00,$7F,$FF,$FF,$E4,$40,$00,$00,$00
+.db $00,$00,$00,$00,$7F,$FF,$FF,$E4,$40,$00,$00,$00,$00,$00,$00,$00
+.db $3F,$FF,$FF,$C4,$40,$00,$00,$00,$00,$00,$00,$00,$00,$00,$00,$04
+.db $20,$00,$00,$00,$00,$00,$00,$00,$00,$00,$00,$08,$20,$00,$00,$00
+.db $00,$00,$00,$00,$00,$00,$00,$08,$1F,$FF,$FF,$FF,$FF,$FF,$FF,$FF
+.db $FF,$FF,$FF,$F0,$00,$00,$00,$00,$00,$00,$00,$00,$00,$00,$00,$00
+
+
+
+
+
+
+
+ChooseLevel:
+.db $FF,$FF,$FF,$FF,$FF,$FF,$FF,$FF,$FF,$F0,$00,$00,$FF,$FF,$FF,$FF
+.db $FF,$FF,$FF,$FF,$FF,$F0,$0F,$00,$C0,$40,$00,$00,$00,$00,$00,$00
+.db $04,$30,$7F,$E0,$C7,$40,$00,$00,$00,$08,$00,$00,$04,$30,$FF,$F0
+.db $C9,$40,$00,$00,$00,$08,$00,$00,$04,$30,$FF,$F0,$D0,$40,$00,$00
+.db $00,$08,$00,$00,$04,$30,$7F,$F8,$D0,$58,$E3,$8F,$38,$08,$1C,$89
+.db $C4,$71,$9F,$F8,$E0,$65,$14,$51,$44,$08,$22,$8A,$24,$71,$CF,$F8
+.db $E0,$45,$14,$4C,$48,$08,$24,$52,$44,$30,$E3,$F0,$E0,$45,$14,$42
+.db $70,$08,$38,$53,$84,$70,$F8,$30,$E1,$45,$14,$41,$44,$08,$22,$22
+.db $24,$70,$7E,$00,$DE,$44,$E3,$9E,$38,$0F,$9C,$21,$C4,$30,$0F,$00
+.db $FF,$FF,$FF,$FF,$FF,$FF,$FF,$FF,$FF,$F0,$00,$00,$FF,$FF,$FF,$FF
+.db $FF,$FF,$FF,$FF,$FF,$F0,$00,$00
+
+ChooseLevel2:
+.db $FF,$FF,$FF,$FF,$FF,$FF,$FF,$FF,$FF,$F0,$00,$00,$80,$00,$00,$00
+.db $00,$00,$00,$00,$00,$10,$0F,$00,$BF,$FF,$FF,$FF,$FF,$FF,$FF,$FF
+.db $FF,$D3,$F0,$E0,$BF,$FF,$FF,$FF,$FF,$FF,$FF,$FF,$FF,$D2,$80,$10
+.db $BF,$FF,$FF,$FF,$FF,$FF,$FF,$FF,$FF,$D3,$80,$10,$BF,$FF,$FF,$FF
+.db $FF,$FF,$FF,$FF,$FF,$D1,$80,$08,$BF,$FF,$FF,$FF,$FF,$FF,$FF,$FF
+.db $FF,$D1,$60,$08,$BF,$FF,$FF,$FF,$FF,$FF,$FF,$FF,$FF,$D1,$30,$0C
+.db $BF,$FF,$FF,$FF,$FF,$FF,$FF,$FF,$FF,$D0,$9C,$16,$BF,$FF,$FF,$FF
+.db $FF,$FF,$FF,$FF,$FF,$D0,$87,$D6,$BF,$FF,$FF,$FF,$FF,$FF,$FF,$FF
+.db $FF,$D0,$71,$FC,$BF,$FF,$FF,$FF,$FF,$FF,$FF,$FF,$FF,$D0,$0F,$00
+.db $80,$00,$00,$00,$00,$00,$00,$00,$00,$10,$00,$00,$FF,$FF,$FF,$FF
+.db $FF,$FF,$FF,$FF,$FF,$F0,$00,$00
+Incomp1:
+.db $7F,$87,$8F,$8C,$98,$98,$80,$80
+Incomp2:
+.db $FE,$C1,$E1,$61,$31,$31,$61,$E1
+InComp3:
+.db $81,$81,$81,$80,$83,$83,$80,$7F
+incomp4:
+.db $81,$81,$01,$01,$01,$01,$01,$FE
+
+comp1:
+.db $7F,$80,$BF,$A0,$A2,$A2,$A0,$94
+comp2:
+.db $FE,$01,$FD,$05,$45,$45,$0D,$29
+
+
+comp3:
+.db $93,$90,$88,$84,$8C,$90,$9F,$7F
+comp4:
+.db $C9,$09,$11,$21,$31,$09,$F9,$FE
+end_code:
+Object_Table:
+;.db Picture, xcor, ycor, reserved, reserved, reserved
+;32 objects atm
+.db 0,0,0,0,0,0,0,0
+.db 0,0,0,0,0,0,0,0
+.db 0,0,0,0,0,0,0,0
+.db 0,0,0,0,0,0,0,0
+.db 0,0,0,0,0,0,0,0
+.db 0,0,0,0,0,0,0,0
+.db 0,0,0,0,0,0,0,0
+.db 0,0,0,0,0,0,0,0
+.db 0,0,0,0,0,0,0,0
+.db 0,0,0,0,0,0,0,0
+.db 0,0,0,0,0,0,0,0
+.db 0,0,0,0,0,0,0,0
+.db 0,0,0,0,0,0,0,0
+.db 0,0,0,0,0,0,0,0
+.db 0,0,0,0,0,0,0,0
+.db 0,0,0,0,0,0,0,0
+.db 0,0,0,0,0,0,0,0
+.db 0,0,0,0,0,0,0,0
+.db 0,0,0,0,0,0,0,0
+.db 0,0,0,0,0,0,0,0
+.db 0,0,0,0,0,0,0,0
+.db 0,0,0,0,0,0,0,0
+.db 0,0,0,0,0,0,0,0
+.db 0,0,0,0,0,0,0,0
+.db 0,0,0,0,0,0,0,0
+.db 0,0,0,0,0,0,0,0
+.db 0,0,0,0,0,0,0,0
+.db 0,0,0,0,0,0,0,0
+.db 0,0,0,0,0,0,0,0
+.db 0,0,0,0,0,0,0,0
+.db 0,0,0,0,0,0,0,0
+.db 0,0,0,0,0,0,0,0
+
+.end
+END
+
+
+
+
+
+
+
