@@ -7,6 +7,7 @@ The source code is written in [z80 assembly language](https://tutorials.eeems.ca
 
 ## Screenshot
 <img src="https://user-images.githubusercontent.com/6684972/214004632-31845975-ae30-4f07-9220-565a263d1dea.gif" width="250">
+<sub>Yes, sadly the background scrolls in the wrong direction and I didn't notice back then. Whoops.</sub>
 
 ## Timeline
 2010 - initial release
