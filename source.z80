@@ -1,6 +1,5 @@
 ;==========================================================
 ;Annihilation shooter
-;Christopher Jernigan
 ;==========================================================
         .nolist
 #ifdef	VTI
@@ -3599,7 +3598,7 @@ Menux:
 VARIABLES:
 ;-----------------------------------------------
 CharTable:
-.DB  $27, "WRMH", $FF, $FF        ; + - × ÷ ^ undefined
+.DB  $27, "WRMH", $FF, $FF        ; + - Ã— Ã· ^ undefined
 .DB  "?", $5B, "VQLG", $FF, $FF    ; (-) 3 6 9 ) TAN VARS undefined
 .DB  ":ZUPKFC", $FF             ; . 2 5 8 ( COS PRGM STAT
 .DB  " YTOJEB", $FF, $FF         ; 0 1 4 7 , SIN APPS XT?n undefined
