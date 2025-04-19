@@ -6,7 +6,7 @@ For more info about uploading the game to your calculator, see https://www.tical
 The source code is written in [z80 assembly language](https://tutorials.eeems.ca/ASMin28Days/lesson/toc.html).
 
 ## Screenshot
-<img src="https://user-images.githubusercontent.com/6684972/214004632-31845975-ae30-4f07-9220-565a263d1dea.gif" width="250">
+<img src="screenshot.gif" width="250">
 <sub>Sadly the background scrolls in the wrong direction and I didn't notice that back then. Whoops.</sub>
 
 ## Timeline
